@@ -10,6 +10,7 @@
 #SBATCH --time=1-00:00:00
 #SBATCH --mem=64G
 #SBATCH --partition=gpu
+#SBATCH --constraint=h100
 
 # =============================================================================
 # KODIAK Experiment Runner - SLURM Script
