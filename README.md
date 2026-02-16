@@ -521,28 +521,54 @@ Runs few-shot evaluation across multiple methods, datasets, and shot counts.
 
 All SLURM scripts are in `scripts/slurm/`. They wrap the local scripts and support optional Singularity containers.
 
+**SLURM defaults:** 1 node, 2 GPUs, 22 CPUs, 32GB RAM, 4 days, `gpu` partition.
+
 ### `run_experiment.sh` — Single SLURM Job
 
 Runs one full pretrain + classify experiment as a SLURM job. All parameters are set via environment variables.
 
 ```bash
-# Without container (uses conda/system Python)
-NUM_PROTOTYPES=128 DATASET=dtd \
+# From scratch — full pipeline on DTD
+DATASET=dtd NUM_PROTOTYPES=4096 \
+    PRETRAIN_EPOCHS=500 PRETRAIN_LR=0.0001 \
+    CLASSIFY_EPOCHS=100 CLASSIFY_LR=0.0001 \
+    CLASSIFY_MODE=finetune BATCH_SIZE=128 \
+    SEEDS="0 1 42" PRETRAIN_SEED=42 \
+    INIT_MODE=scratch MULTI_CROP=true \
+    KOLEO_WEIGHT=0.1 CLS_WEIGHT=1.0 \
+    LOGGER=tensorboard OUTPUT_DIR=output \
+    sbatch scripts/slurm/run_experiment.sh
+
+# Continued from DINOv3 — fewer pretrain epochs needed
+DATASET=dtd NUM_PROTOTYPES=4096 \
+    PRETRAIN_EPOCHS=100 PRETRAIN_LR=0.0001 \
+    CLASSIFY_EPOCHS=100 CLASSIFY_LR=0.0001 \
+    INIT_MODE=continued MULTI_CROP=true \
+    BATCH_SIZE=128 SEEDS="0 1 42" \
+    LOGGER=tensorboard OUTPUT_DIR=output \
+    sbatch scripts/slurm/run_experiment.sh
+
+# Classification only — skip pretraining, use existing checkpoint
+DATASET=dtd NUM_PROTOTYPES=4096 \
+    SKIP_PRETRAIN=true \
+    PRETRAINED_PATH=/path/to/checkpoint.ckpt \
+    CLASSIFY_EPOCHS=100 CLASSIFY_LR=0.0001 \
+    CLASSIFY_MODE=finetune BATCH_SIZE=128 \
+    SEEDS="0 1 42" LOGGER=tensorboard \
     sbatch scripts/slurm/run_experiment.sh
 
 # With Singularity container
-NUM_PROTOTYPES=256 DATASET=eurosat \
+DATASET=eurosat NUM_PROTOTYPES=128 \
+    PRETRAIN_EPOCHS=500 BATCH_SIZE=64 \
     USE_SINGULARITY=true SIF_IMAGE=/path/to/deeplearning.sif \
     sbatch scripts/slurm/run_experiment.sh
 ```
-
-**SLURM defaults:** 1 node, 2 GPUs, 22 CPUs, 32GB RAM, 4 days, `gpu` partition.
 
 | Environment Variable | Description | Default |
 |---------------------|-------------|---------|
 | `NUM_PROTOTYPES` | Number of prototypes **(required)** | — |
 | `DATASET` | Dataset name | dtd |
-| `INIT_MODE` | `scratch` or `continued` | scratch |
+| `INIT_MODE` | `scratch` or `continued` (from DINOv3) | scratch |
 | `SEEDS` | Classification seeds (space-separated) | "0 1 42" |
 | `PRETRAIN_SEED` | Pretraining seed | 42 |
 | `PRETRAIN_EPOCHS` | Pretraining epochs | 500 |
@@ -555,6 +581,7 @@ NUM_PROTOTYPES=256 DATASET=eurosat \
 | `CLS_WEIGHT` | CLS loss weight | 1.0 |
 | `MULTI_CROP` | Enable multi-crop (`true`/`false`) | true |
 | `COMPILE` | Enable `torch.compile()` (`true`/`false`) | false |
+| `LOGGER` | Logger type: `csv`, `tensorboard`, `wandb` | csv |
 | `OUTPUT_DIR` | Output directory | output_proto_analysis |
 | `SKIP_PRETRAIN` | Skip pretraining (`true`/`false`) | false |
 | `SKIP_CLASSIFY` | Skip classification (`true`/`false`) | false |
@@ -578,7 +605,22 @@ Edit the script to customize the sweep parameters (dataset, epochs, batch size, 
 SLURM wrapper for a single sweep job with configurable resources.
 
 ```bash
-DATASET=eurosat PRETRAIN_EPOCHS=500 sbatch scripts/slurm/run_sweep.sh
+# Full pipeline on EuroSAT from scratch
+DATASET=eurosat \
+    PRETRAIN_EPOCHS=500 PRETRAIN_LR=0.0001 \
+    CLASSIFY_EPOCHS=100 CLASSIFY_LR=0.0001 \
+    CLASSIFY_MODE=finetune BATCH_SIZE=64 \
+    INIT_MODE=scratch MULTI_CROP=true \
+    KOLEO_WEIGHT=0.1 CLS_WEIGHT=1.0 \
+    SEEDS="0 1 42" LOGGER=tensorboard \
+    sbatch scripts/slurm/run_sweep.sh
+
+# Continued from DINOv3 on Oxford Pets
+DATASET=oxford_pets \
+    PRETRAIN_EPOCHS=100 INIT_MODE=continued \
+    CLASSIFY_EPOCHS=100 BATCH_SIZE=128 \
+    MULTI_CROP=true LOGGER=tensorboard \
+    sbatch scripts/slurm/run_sweep.sh
 ```
 
 Same environment variables as `run_experiment.sh`.
@@ -588,7 +630,19 @@ Same environment variables as `run_experiment.sh`.
 SLURM wrapper for ablation experiments. Requires `ABLATION` environment variable.
 
 ```bash
-ABLATION=no_koleo DATASET=dtd sbatch scripts/slurm/run_ablation.sh
+# Run a single ablation (no KoLeo regularization)
+ABLATION=no_koleo DATASET=dtd \
+    PRETRAIN_EPOCHS=500 CLASSIFY_EPOCHS=100 \
+    BATCH_SIZE=128 LOGGER=tensorboard \
+    sbatch scripts/slurm/run_ablation.sh
+
+# Run all ablations
+for ABL in full no_sinkhorn no_cls_loss no_koleo; do
+    ABLATION=$ABL DATASET=dtd \
+        PRETRAIN_EPOCHS=500 CLASSIFY_EPOCHS=100 \
+        BATCH_SIZE=128 LOGGER=tensorboard \
+        sbatch scripts/slurm/run_ablation.sh
+done
 ```
 
 | Additional Variable | Description | Default |
