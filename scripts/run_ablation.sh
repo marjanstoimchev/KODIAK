@@ -185,7 +185,7 @@ declare -A CONFIG_DIRS=(
     ["oxford_pets"]="oxford_pets"
     ["nctcrche100k"]="NCTCRCHE100K"
     ["imagenet1k"]="imagenet1k"
-    ["tissue"]="tissue"
+    ["pancreatic"]="pancreatic"
 )
 
 CONFIG_DIR="${CONFIG_DIRS[$DATASET]}"

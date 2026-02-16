@@ -92,8 +92,9 @@ class ClassificationDataModule(pl.LightningDataModule):
         sampler_type: SamplerType = SamplerType.DISTRIBUTED,
         # Seed for reproducible splits
         seed: int = 42,
-        # Tissue dataset args
+        # Custom dataset args
         csv_path: Optional[str] = None,
+        root_dir: Optional[str] = None,
         magnification: Optional[str] = None,
         root_path: Optional[str] = None,
         # HuggingFace dataset args
@@ -118,6 +119,7 @@ class ClassificationDataModule(pl.LightningDataModule):
 
         # Dataset args
         self.csv_path = csv_path
+        self.root_dir = root_dir
         self.magnification = magnification
         self.root_path = root_path
         self.hf_dataset_name = hf_dataset_name
@@ -153,13 +155,17 @@ class ClassificationDataModule(pl.LightningDataModule):
 
         kwargs = {}
 
-        if self.dataset_type == 'tissue':
-            logger.info(f"Loading tissue dataset from: {self.csv_path}")
-            kwargs = {
-                'csv_file': self.csv_path,
-                'magnification_filter': self.magnification,
-                'root_path': self.root_path
-            }
+        if self.dataset_type == 'pancreatic':
+            if self.root_dir:
+                logger.info(f"Loading pancreatic dataset from folder: {self.root_dir}")
+                kwargs = {'root_dir': self.root_dir}
+            else:
+                logger.info(f"Loading pancreatic dataset from CSV: {self.csv_path}")
+                kwargs = {
+                    'csv_file': self.csv_path,
+                    'magnification_filter': self.magnification,
+                    'root_path': self.root_path
+                }
 
         elif self.dataset_type == 'huggingface':
             logger.info(f"Loading HuggingFace dataset: {self.hf_dataset_name}")

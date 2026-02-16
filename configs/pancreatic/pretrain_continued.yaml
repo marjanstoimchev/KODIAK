@@ -1,28 +1,28 @@
 # =============================================================================
-# KODIAK Pretraining Configuration - Tissue
+# KODIAK Pretraining Configuration - Pancreatic
 # =============================================================================
 # Self-supervised pretraining with KODIAK
 # and Multi-Crop Prototype CLS Loss - WITH DINOv3 PRETRAINED INITIALIZATION
 #
 # Usage:
-#   python scripts/train.py --config configs/tissue/pretrain_continued.yaml
+#   python scripts/train.py --config configs/pancreatic/pretrain_continued.yaml
 #
 #   # Override hyperparameters from command line:
-#   python scripts/train.py --config configs/tissue/pretrain_continued.yaml \
+#   python scripts/train.py --config configs/pancreatic/pretrain_continued.yaml \
 #       --num_prototypes 8192 --koleo_weight 0.2
 # =============================================================================
 
 experiment:
-  name: "kodiak_tissue"
+  name: "kodiak_pancreatic"
   seed: 42
 
 # -----------------------------------------------------------------------------
 # Data Configuration
 # -----------------------------------------------------------------------------
 data:
-  name: "tissue"
-  dataset_type: "tissue"
-  csv_path: "/path/to/patches.csv"
+  name: "pancreatic"
+  dataset_type: "pancreatic"
+  root_dir: "/home/marjans/Datasets/pancreatic/SLIDE-3210"
 
   batch_size: 64
   num_workers: 32
@@ -81,7 +81,7 @@ model:
   num_storage_tokens: 4
   mask_k_bias: true
   use_sdpa: false
-  drop_path_rate: 0.3
+  drop_path_rate: 0.1
 
   # Prototype configuration
   num_prototypes: 4096
@@ -125,18 +125,18 @@ loss:
   n_local_crops: 8
 
 # -----------------------------------------------------------------------------
-# Optimizer Configuration
+# Optimizer Configuration - ADJUSTED FOR CONTINUED PRETRAINING
 # -----------------------------------------------------------------------------
 optimizer:
   learning_rate: 1.0e-4
-  min_lr: 1.0e-4
-  lr_scaling: "sqrt_wrt_1024"
+  min_lr: 1.0e-6
+  lr_scaling: null
 
   weight_decay: 0.04
-  weight_decay_end: 0.04
+  weight_decay_end: 0.4
 
-  warmup_epochs: 10
-  freeze_last_layer_epochs: 1
+  warmup_epochs: 5
+  freeze_last_layer_epochs: 3
 
   layerwise_decay: 0.9
   patch_embed_lr_mult: 0.2
@@ -145,18 +145,18 @@ optimizer:
   adamw_beta2: 0.999
   dino_head_wd_multiplier: 1.0
 
-  ema_momentum: 0.994
-  ema_momentum_end: 0.994
+  ema_momentum: 0.996
+  ema_momentum_end: 1.0
 
   teacher_temp_warmup: 0.04
   teacher_temp: 0.07
-  teacher_temp_warmup_epochs: 30
+  teacher_temp_warmup_epochs: 10
 
 # -----------------------------------------------------------------------------
-# Training Configuration
+# Training Configuration - SHORTER FOR CONTINUED PRETRAINING
 # -----------------------------------------------------------------------------
 training:
-  max_epochs: 100
+  max_epochs: 50
   gradient_clip_val: 3.0
   accumulate_grad_batches: 1
   precision: "bf16-mixed"
@@ -179,7 +179,7 @@ training:
   early_stopping:
     enabled: false
     monitor: "train_loss"
-    patience: 20
+    patience: 50
     mode: "min"
 
 # -----------------------------------------------------------------------------
@@ -194,6 +194,6 @@ logging:
     project: "kodiak"
     entity: null
     tags:
-      - "tissue"
+      - "pancreatic"
       - "kodiak"
       - "pretraining"

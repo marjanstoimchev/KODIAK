@@ -1,4 +1,4 @@
-# tissue_dataset/datamodule.py (relevant parts)
+# custom/datamodule.py
 
 from typing import Optional, Any, Dict
 import torch
@@ -10,7 +10,7 @@ from kornia.augmentation import AugmentationSequential, RandomResizedCrop, Rando
     ColorJitter, RandomGrayscale, RandomGaussianBlur, Normalize
 from kornia.constants import DataKey
 
-from .dataset import TissuePatchDataset
+from .dataset import CustomPatchDataset
 
 
 class KorniaAugModule(nn.Module):
@@ -158,7 +158,7 @@ class TransformDataset(torch.utils.data.Dataset):
         return {"images": image, **meta}
 
 
-class TissueDataModule(pl.LightningDataModule):
+class CustomDataModule(pl.LightningDataModule):
     def __init__(
         self,
         csv_path: str,
@@ -197,7 +197,7 @@ class TissueDataModule(pl.LightningDataModule):
         self.val_dataset = None
 
     def setup(self, stage: Optional[str] = None):
-        full_dataset = TissuePatchDataset(
+        full_dataset = CustomPatchDataset(
             csv_file=self.csv_path,
             magnification_filter=self.magnification,
             root_path=self.root_path,

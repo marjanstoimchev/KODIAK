@@ -298,7 +298,7 @@ def main():
     # We build the datamodule to get the full train/val/test splits,
     # then replace the train set with the k-shot subset.
     datamodule = ClassificationDataModule(
-        dataset_type=cfg.data.get("dataset_type", "tissue"),
+        dataset_type=cfg.data.get("dataset_type", "huggingface"),
         batch_size=per_gpu_bs,
         num_workers=cfg.data.get("num_workers", 8),
         pin_memory=cfg.data.get("pin_memory", True),

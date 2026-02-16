@@ -1,24 +1,24 @@
 # =============================================================================
-# KODIAK Classification Configuration - Tissue
+# KODIAK Classification Configuration - Pancreatic
 # =============================================================================
 # Supports both linear evaluation and fine-tuning
 #
 # Usage:
-#   python scripts/train_classifier.py --config configs/tissue/classify.yaml
+#   python scripts/train_classifier.py --config configs/pancreatic/classify.yaml
 # =============================================================================
 
 experiment:
-  name: "classify_tissue"
+  name: "classify_pancreatic"
   seed: 42
 
 data:
-  name: "tissue"
-  dataset_type: "tissue"
-  csv_path: "/path/to/patches.csv"
+  name: "pancreatic"
+  dataset_type: "pancreatic"
+  root_dir: "/home/marjans/Datasets/pancreatic/SLIDE-3210"
   batch_size: 48
   num_workers: 32
   image_size: 256
-  num_classes: 10
+  num_classes: 7
   val_split: 0.1
   test_split: 0.2
 
@@ -58,5 +58,5 @@ training:
   early_stopping_patience: 10
 
 logging:
-  base_dir: "output/classification/tissue"
+  base_dir: "output/classification/pancreatic"
   checkpoint_dir: "checkpoints"

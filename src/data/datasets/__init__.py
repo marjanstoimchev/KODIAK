@@ -1,18 +1,14 @@
 # =============================================================================
 # Dataset Implementations
 # =============================================================================
-# Specific dataset implementations: HuggingFace, tissue histology, etc.
+# Specific dataset implementations: HuggingFace, custom folder-based, etc.
 # =============================================================================
 
 from .huggingface.dataset import HuggingFaceDataset, get_available_splits
-from .tissue.dataset import TissuePatchDataset
-
-# Alias for consistency
-TissueDataset = TissuePatchDataset
+from .custom.dataset import CustomPatchDataset
 
 __all__ = [
     "HuggingFaceDataset",
     "get_available_splits",
-    "TissuePatchDataset",
-    "TissueDataset",
+    "CustomPatchDataset",
 ]

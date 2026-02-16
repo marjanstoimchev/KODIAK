@@ -661,7 +661,7 @@ done
 | CIFAR-100 | `configs/cifar100/` | HuggingFace | 100 |
 | NCTCRCHE100K | `configs/NCTCRCHE100K/` | HuggingFace | 9 |
 | ImageNet-1K | `configs/imagenet1k/` | HuggingFace | 1000 |
-| Tissue | `configs/tissue/` | Custom (CSV) | varies |
+| Pancreatic | `configs/pancreatic/` | Custom (folder) | 7 |
 
 Each dataset directory contains:
 - `pretrain.yaml` — Self-supervised pretraining config
@@ -868,7 +868,7 @@ KODIAK/
 │   ├── cifar100/
 │   ├── NCTCRCHE100K/
 │   ├── imagenet1k/
-│   └── tissue/
+│   └── pancreatic/
 ├── dinov3/                      # DINOv3 library (backbone, utilities)
 └── requirements.txt
 ```

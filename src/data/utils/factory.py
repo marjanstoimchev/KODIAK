@@ -40,8 +40,8 @@ class DatasetRegistry:
             name: Unique identifier for this dataset type
 
         Example:
-            @DatasetRegistry.register("tissue")
-            class TissueDataset(Dataset):
+            @DatasetRegistry.register("pancreatic")
+            class PancreaticDataset(Dataset):
                 pass
         """
         def decorator(dataset_cls: Type[Dataset]) -> Type[Dataset]:
@@ -63,7 +63,7 @@ class DatasetRegistry:
         Create a dataset instance by type.
 
         Args:
-            dataset_type: Registered dataset type (e.g., 'tissue', 'huggingface')
+            dataset_type: Registered dataset type (e.g., 'pancreatic', 'huggingface')
             **kwargs: Arguments to pass to the dataset constructor
 
         Returns:
@@ -74,9 +74,8 @@ class DatasetRegistry:
 
         Example:
             dataset = DatasetRegistry.create(
-                "tissue",
-                csv_path="data/patches.csv",
-                magnification="10X"
+                "pancreatic",
+                root_dir="/path/to/dataset"
             )
         """
         if dataset_type not in cls._registry:
@@ -138,13 +137,13 @@ class DatasetRegistry:
 def _register_builtin_datasets():
     """Auto-register built-in dataset types."""
     try:
-        from data.datasets.tissue.dataset import TissuePatchDataset
-        DatasetRegistry.register("tissue")(TissuePatchDataset)
+        from src.data.datasets.custom.dataset import CustomPatchDataset
+        DatasetRegistry.register("pancreatic")(CustomPatchDataset)
     except ImportError as e:
-        logger.warning(f"Could not register tissue dataset: {e}")
+        logger.warning(f"Could not register pancreatic dataset: {e}")
 
     try:
-        from data.datasets.huggingface.dataset import HuggingFaceDataset
+        from src.data.datasets.huggingface.dataset import HuggingFaceDataset
         DatasetRegistry.register("huggingface")(HuggingFaceDataset)
     except ImportError as e:
         logger.warning(f"Could not register HuggingFace dataset: {e}")

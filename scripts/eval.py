@@ -182,7 +182,7 @@ def main():
 
     # Create datamodule
     datamodule = ClassificationDataModule(
-        dataset_type=cfg.data.get("dataset_type", "tissue"),
+        dataset_type=cfg.data.get("dataset_type", "huggingface"),
         batch_size=per_gpu_batch_size,
         num_workers=cfg.data.get("num_workers", 8),
         pin_memory=cfg.data.get("pin_memory", True),

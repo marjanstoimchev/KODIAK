@@ -235,7 +235,7 @@ def create_datamodule(cfg, batch_size, seed):
     pl.seed_everything(seed, workers=True)
 
     datamodule = ClassificationDataModule(
-        dataset_type=cfg.data.get("dataset_type", "tissue"),
+        dataset_type=cfg.data.get("dataset_type", "huggingface"),
         batch_size=batch_size,
         num_workers=cfg.data.get("num_workers", 8),
         pin_memory=True,

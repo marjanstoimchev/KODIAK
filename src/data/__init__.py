@@ -19,7 +19,7 @@
 #   │   └── factory.py
 #   └── datasets/          # Dataset implementations
 #       ├── huggingface/
-#       └── tissue/
+#       └── custom/
 # =============================================================================
 
 # Pretraining
@@ -57,12 +57,11 @@ from .utils import (
 from .datasets import (
     HuggingFaceDataset,
     get_available_splits,
-    TissueDataset,
+    CustomPatchDataset,
 )
 
 # Legacy aliases for backward compatibility
 FlexibleDataModule = PretrainingDataModule
-TissueDataModule = PretrainingDataModule
 
 __all__ = [
     # Pretraining
@@ -90,8 +89,7 @@ __all__ = [
     # Datasets
     "HuggingFaceDataset",
     "get_available_splits",
-    "TissueDataset",
+    "CustomPatchDataset",
     # Legacy
     "FlexibleDataModule",
-    "TissueDataModule",
 ]

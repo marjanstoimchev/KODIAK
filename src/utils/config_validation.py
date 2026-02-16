@@ -37,11 +37,14 @@ def validate_config(config: Dict[str, Any]) -> List[str]:
         dataset_type = data.get('dataset_type')
 
         # Dataset-specific requirements
-        if dataset_type == 'tissue':
+        if dataset_type == 'pancreatic':
+            root_dir = data.get('root_dir')
             csv_path = data.get('csv_path')
-            if not csv_path:
-                errors.append("data.csv_path is required for dataset_type='tissue'")
-            elif not Path(csv_path).exists():
+            if not root_dir and not csv_path:
+                errors.append("data.root_dir or data.csv_path is required for dataset_type='pancreatic'")
+            elif root_dir and not Path(root_dir).is_dir():
+                errors.append(f"Dataset directory not found: {root_dir}")
+            elif csv_path and not root_dir and not Path(csv_path).exists():
                 errors.append(f"CSV file not found: {csv_path}")
 
         elif dataset_type == 'huggingface':

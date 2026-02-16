@@ -352,7 +352,7 @@ def main():
     sampler_type = SamplerType[sampler_type_str]
 
     datamodule = PretrainingDataModule(
-        dataset_type=cfg.data.get("dataset_type", "tissue"),
+        dataset_type=cfg.data.get("dataset_type", "huggingface"),
         batch_size=per_gpu_batch_size,
         num_workers=cfg.data.num_workers,
         pin_memory=cfg.data.pin_memory,
@@ -373,8 +373,9 @@ def main():
         # Sampler config
         sampler_type=sampler_type,
 
-        # Tissue specific
+        # Custom dataset specific
         csv_path=cfg.data.get("csv_path", None),
+        root_dir=cfg.data.get("root_dir", None),
         magnification=cfg.data.get("magnification", None),
         root_path=cfg.data.get("root_path", None),
 

@@ -460,7 +460,7 @@ def main():
     image_size = cfg.data.get("image_size", aug.get("global_crops_size", 256))
 
     datamodule = ClassificationDataModule(
-        dataset_type=cfg.data.get("dataset_type", "tissue"),
+        dataset_type=cfg.data.get("dataset_type", "huggingface"),
         batch_size=per_gpu_batch_size,
         num_workers=cfg.data.get("num_workers", 8),
         pin_memory=cfg.data.get("pin_memory", True),
@@ -474,8 +474,9 @@ def main():
         sampler_type=sampler_type,
         seed=cfg.experiment.seed,
 
-        # Tissue specific
+        # Custom dataset specific
         csv_path=cfg.data.get("csv_path", None),
+        root_dir=cfg.data.get("root_dir", None),
         magnification=cfg.data.get("magnification", None),
         root_path=cfg.data.get("root_path", None),
 

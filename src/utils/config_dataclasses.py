@@ -201,7 +201,7 @@ class DataConfig:
     Data loading and augmentation configuration.
 
     Attributes:
-        dataset_type: Type of dataset ('tissue', 'huggingface', etc.)
+        dataset_type: Type of dataset ('pancreatic', 'huggingface', etc.)
         batch_size: Batch size for training
         num_workers: Number of DataLoader workers
         pin_memory: Whether to pin memory for faster GPU transfer
@@ -210,7 +210,7 @@ class DataConfig:
         val_split: Fraction of data for validation
         multi_crop: Whether to use multi-crop training (for MultiCropPrototypeCLSLoss)
     """
-    dataset_type: str = "tissue"
+    dataset_type: str = "pancreatic"
     batch_size: int = 128
     num_workers: int = 8
     pin_memory: bool = True
@@ -221,6 +221,7 @@ class DataConfig:
     multi_crop: bool = False
 
     # Dataset-specific parameters
+    root_dir: Optional[str] = None
     csv_path: Optional[str] = None
     magnification: Optional[str] = None
     root_path: Optional[str] = None
@@ -244,14 +245,13 @@ class DataConfig:
             )
 
         # Validate dataset-specific requirements
-        if self.dataset_type == "tissue":
-            if self.csv_path is None:
-                raise ValueError("csv_path is required when dataset_type='tissue'")
-            if not Path(self.csv_path).exists():
-                raise FileNotFoundError(
-                    f"csv_path does not exist: {self.csv_path}\n"
-                    f"Please provide a valid path to the CSV file with tissue patches."
-                )
+        if self.dataset_type == "pancreatic":
+            if self.root_dir is None and self.csv_path is None:
+                raise ValueError("root_dir or csv_path is required when dataset_type='pancreatic'")
+            if self.root_dir and not Path(self.root_dir).is_dir():
+                raise FileNotFoundError(f"root_dir does not exist: {self.root_dir}")
+            if self.csv_path and not self.root_dir and not Path(self.csv_path).exists():
+                raise FileNotFoundError(f"csv_path does not exist: {self.csv_path}")
 
         elif self.dataset_type == "huggingface":
             if self.hf_dataset_name is None:

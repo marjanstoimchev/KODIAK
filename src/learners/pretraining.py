@@ -194,7 +194,7 @@ def scale_lr(base_lr: float, batch_size: int, world_size: int, scaling: str = "s
     Returns:
         Scaled learning rate
     """
-    if scaling == "none":
+    if scaling is None or scaling == "none":
         return base_lr
     elif scaling == "sqrt_wrt_1024":
         effective_batch_size = batch_size * world_size
