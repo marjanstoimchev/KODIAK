@@ -22,7 +22,7 @@ data:
   hf_split: "train"
 
   batch_size: 128
-  num_workers: 32
+  num_workers: 22
   pin_memory: true
   persistent_workers: true
   train_split: 0.9

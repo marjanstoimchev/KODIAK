@@ -16,7 +16,7 @@ data:
   dataset_type: "huggingface"
   hf_dataset_name: "DykeF/NCTCRCHE100K"
   batch_size: 48
-  num_workers: 32
+  num_workers: 22
   image_size: 256
   num_classes: 9
   val_split: 0.1
