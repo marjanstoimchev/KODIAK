@@ -1,0 +1,62 @@
+# =============================================================================
+# KODIAK Classification Configuration - CIFAR-100
+# =============================================================================
+# Supports both linear evaluation and fine-tuning
+#
+# Usage:
+#   python scripts/train_classifier.py --config configs/cifar100/classify.yaml
+# =============================================================================
+
+experiment:
+  name: "classify_cifar100"
+  seed: 42
+
+data:
+  name: "cifar100"
+  dataset_type: "huggingface"
+  hf_dataset_name: "uoft-cs/cifar100"
+  batch_size: 48
+  num_workers: 32
+  image_size: 256
+  num_classes: 100
+  val_split: 0.1
+  test_split: 0.2
+
+model:
+  # Encoder (ViT-Small)
+  embed_dim: 384
+  depth: 12
+  num_heads: 6
+  patch_size: 16
+  mlp_ratio: 4.0
+
+  # KODIAK-specific (needed for checkpoint loading)
+  num_prototypes: 4096
+  projector_dim: 256
+  decoder_dim: 192
+  decoder_depth: 4
+  decoder_heads: 6
+  num_storage_tokens: 4
+
+  # Pretrained weights (set via CLI or override here)
+  pretrained_path: null
+
+  # Fine-tuning settings
+  freeze_backbone: false
+
+optimizer:
+  lr: 1.0e-4
+  weight_decay: 0.04
+  warmup_epochs: 5
+  backbone_lr_scale: 0.1
+
+training:
+  max_epochs: 50
+  precision: "bf16-mixed"
+  devices: [0]
+  gradient_clip_val: 3.0
+  early_stopping_patience: 10
+
+logging:
+  base_dir: "output/classification/cifar100"
+  checkpoint_dir: "checkpoints"

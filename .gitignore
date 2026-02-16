@@ -1,0 +1,50 @@
+# Output and logs
+output*/
+logs*/
+ablations*/
+checkpoints/
+
+# Model weights (general)
+*.ckpt
+*.pt
+*.pth
+*.bin
+*.safetensors
+
+# Exception: track DINOv3 pretrained weights
+!dinov3_weights/
+!dinov3_weights/*.pth
+
+# Containers
+*.sif
+deeplearning.sif
+
+# Notebooks
+*.ipynb
+.ipynb_checkpoints/
+notebooks*/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Figures and paper
+figures/
+*.pdf
+*.png
+paper.tex
+
+# OS
+.DS_Store
+Thumbs.db

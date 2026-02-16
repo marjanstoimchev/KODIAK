@@ -1,0 +1,195 @@
+# =============================================================================
+# KODIAK Pretraining Configuration - ImageNet-1K
+# =============================================================================
+# Self-supervised pretraining with KODIAK
+# and Multi-Crop Prototype CLS Loss - WITH DINOv3 PRETRAINED INITIALIZATION
+#
+# Usage:
+#   python scripts/train.py --config configs/imagenet1k/pretrain_continued.yaml
+# NOTE: Requires HuggingFace authentication for ImageNet access
+# =============================================================================
+
+experiment:
+  name: "kodiak_imagenet1k_continued"
+  seed: 42
+
+# -----------------------------------------------------------------------------
+# Data Configuration
+# -----------------------------------------------------------------------------
+data:
+  name: "imagenet1k"
+  dataset_type: "huggingface"
+  hf_dataset_name: "ILSVRC/imagenet-1k"
+  hf_split: "train"
+
+  batch_size: 128
+  num_workers: 32
+  pin_memory: true
+  persistent_workers: true
+  train_split: 0.9
+  val_split: 0.1
+
+  sampler_type: "distributed"
+
+  multi_crop: true
+  local_crops_number: 8
+  local_crops_size: 112
+  local_crops_scale:
+    - 0.05
+    - 0.32
+
+  augmentation:
+    global_crops_scale:
+      - 0.32
+      - 1.0
+    global_crops_size: 256
+    local_crops_number: 8
+    local_crops_size: 112
+    local_crops_scale:
+      - 0.05
+      - 0.32
+    share_color_jitter: false
+    horizontal_flips: true
+    normalize_mean:
+      - 0.485
+      - 0.456
+      - 0.406
+    normalize_std:
+      - 0.229
+      - 0.224
+      - 0.225
+
+# -----------------------------------------------------------------------------
+# Model Configuration (ViT-S/16)
+# -----------------------------------------------------------------------------
+model:
+  pretrained_path: "dinov3_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth"
+
+  image_size: 256
+  vit_model: "dinov3_small"
+  vit_patch_size: 16
+  vit_in_chans: 3
+  vit_embed_dim: 384
+  vit_depth: 12
+  vit_heads: 6
+  vit_mlp_ratio: 4.0
+  num_storage_tokens: 4
+  mask_k_bias: true
+  use_sdpa: false
+  drop_path_rate: 0.1
+
+  # Prototype configuration - use more prototypes for better coverage
+  num_prototypes: 128
+  projector_dim: 256
+
+  # Decoder configuration
+  decoder_dim: 192
+  decoder_depth: 4
+  decoder_heads: 6
+
+  # Backbone settings
+  freeze_backbone: false
+  backbone_lr_scale: 1.0
+  compile_model: false
+
+  # Masking configuration
+  mask_strategy: "dinov3"
+  mask_sample_probability: 0.5
+  mask_ratio_min_max:
+    - 0.1
+    - 0.5
+
+  local_crop_size: 112
+  num_local_crops: 8
+
+# -----------------------------------------------------------------------------
+# Loss Configuration - STRONGER REGULARIZATION
+# -----------------------------------------------------------------------------
+loss:
+  teacher_temp: 0.04
+  center_momentum: 0.9
+  sinkhorn_iters: 3
+  koleo_loss_weight: 0.1
+  koleo_distributed: false
+
+  prototype_cls_loss_weight: 1.0
+  prototype_cls_student_temp: 0.1
+  prototype_cls_teacher_temp: 0.04
+  n_local_crops: 8
+
+# -----------------------------------------------------------------------------
+# Optimizer Configuration - ADJUSTED FOR CONTINUED PRETRAINING
+# -----------------------------------------------------------------------------
+optimizer:
+  learning_rate: 1.0e-4
+  min_lr: 1.0e-6
+  lr_scaling: null
+
+  weight_decay: 0.04
+  weight_decay_end: 0.4
+
+  warmup_epochs: 10               # Slightly longer for larger dataset
+  freeze_last_layer_epochs: 3
+
+  layerwise_decay: 0.9
+  patch_embed_lr_mult: 0.2
+
+  adamw_beta1: 0.9
+  adamw_beta2: 0.999
+  dino_head_wd_multiplier: 1.0
+
+  ema_momentum: 0.996
+  ema_momentum_end: 1.0
+
+  teacher_temp_warmup: 0.04
+  teacher_temp: 0.07
+  teacher_temp_warmup_epochs: 10
+
+# -----------------------------------------------------------------------------
+# Training Configuration
+# -----------------------------------------------------------------------------
+training:
+  max_epochs: 50
+  gradient_clip_val: 3.0
+  accumulate_grad_batches: 1
+  precision: "bf16-mixed"
+  check_val_every_n_epoch: 5
+
+  strategy: "auto"
+  devices:
+    - 0
+    - 1
+    - 2
+    - 3
+  num_nodes: 1
+
+  checkpoint:
+    base_dir: "checkpoints/pretraining"
+    monitor: "train_loss"
+    mode: "min"
+    save_top_k: 0
+    save_last: true
+    filename: "kodiak-{epoch:02d}-{train_loss:.4f}"
+    every_n_epochs: null
+
+  early_stopping:
+    enabled: false
+    monitor: "train_loss"
+    patience: 50
+    mode: "min"
+
+# -----------------------------------------------------------------------------
+# Logging Configuration
+# -----------------------------------------------------------------------------
+logging:
+  base_dir: "logs/pretraining"
+  logger: "csv"
+  log_every_n_steps: 10
+
+  wandb:
+    project: "kodiak"
+    entity: null
+    tags:
+      - "imagenet1k"
+      - "kodiak"
+      - "continued_pretraining"
