@@ -441,12 +441,12 @@ def main():
     logger = get_logger_from_config(cfg)
 
     # Save config
-    save_config(cfg, log_dir / "config.yaml")
+    save_config(cfg, log_dir / exp_name / "config.yaml")
 
     # 7. Callbacks (no checkpointing during training — save once at the end)
     callbacks = [
         LearningRateMonitor(logging_interval="step"),
-        TrainingTimer(save_dir=str(log_dir)),
+        TrainingTimer(save_dir=str(log_dir / exp_name)),
     ]
 
     if cfg.training.early_stopping.enabled:
