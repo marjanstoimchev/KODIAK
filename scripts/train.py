@@ -93,6 +93,10 @@ def parse_args():
     # Multi-crop pretraining (for Multi-Crop Prototype CLS Loss)
     p.add_argument("--multi_crop", action="store_true",
                    help="Enable multi-crop training (2 global + N local crops)")
+    p.add_argument("--no_multi_crop", action="store_true",
+                   help="Disable multi-crop training (only 2 global crops)")
+    p.add_argument("--local_crops_number", type=int, default=None,
+                   help="Number of local crops (default: from config, typically 8)")
 
     # Ablation flags for controlled experiments
     p.add_argument("--no_sinkhorn", action="store_true",
@@ -149,6 +153,13 @@ def build_overrides(args) -> Dict[str, Any]:
     # Multi-crop pretraining
     if args.multi_crop:
         o["data.multi_crop"] = True
+    if args.no_multi_crop:
+        o["data.multi_crop"] = False
+    if args.local_crops_number is not None:
+        o["data.local_crops_number"] = args.local_crops_number
+        o["data.augmentation.local_crops_number"] = args.local_crops_number
+        o["model.num_local_crops"] = args.local_crops_number
+        o["loss.n_local_crops"] = args.local_crops_number
     # Ablation flags
     if args.no_sinkhorn:
         o["loss.use_sinkhorn"] = False

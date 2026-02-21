@@ -111,6 +111,7 @@ SKIP_PRETRAIN=false
 SKIP_CLASSIFY=false
 PRETRAINED_PATH=""
 MULTI_CROP=true
+LOCAL_CROPS_NUMBER=""
 COMPILE=false
 CONCAT_CLS_PATCH=false
 SAVE_EVERY_N_EPOCHS=""
@@ -193,6 +194,14 @@ while [[ $# -gt 0 ]]; do
         --multi-crop)
             MULTI_CROP=true
             shift
+            ;;
+        --no-multi-crop)
+            MULTI_CROP=false
+            shift
+            ;;
+        --local-crops-number)
+            LOCAL_CROPS_NUMBER="$2"
+            shift 2
             ;;
         --compile)
             COMPILE=true
@@ -305,14 +314,22 @@ fi
 # Format: kodiak_{dataset}_proto{N}_koleo{W}_cls{C}[_mc]
 EXP_NAME="kodiak_${DATASET}${EXPERIMENT_SUFFIX}_proto${NUM_PROTOTYPES}_koleo${KOLEO_WEIGHT}_cls${CLS_WEIGHT}"
 if [[ "$MULTI_CROP" == true ]]; then
-    EXP_NAME="${EXP_NAME}_mc"
+    if [[ -n "$LOCAL_CROPS_NUMBER" ]]; then
+        EXP_NAME="${EXP_NAME}_mc${LOCAL_CROPS_NUMBER}"
+    else
+        EXP_NAME="${EXP_NAME}_mc"
+    fi
 fi
 
 # Build classification folder name (matches train_classifier.py auto-generated structure)
 # Format: proto{N}_koleo{W}_cls{C}[_mc]
 PRETRAIN_FOLDER="proto${NUM_PROTOTYPES}_koleo${KOLEO_WEIGHT}_cls${CLS_WEIGHT}"
 if [[ "$MULTI_CROP" == true ]]; then
-    PRETRAIN_FOLDER="${PRETRAIN_FOLDER}_mc"
+    if [[ -n "$LOCAL_CROPS_NUMBER" ]]; then
+        PRETRAIN_FOLDER="${PRETRAIN_FOLDER}_mc${LOCAL_CROPS_NUMBER}"
+    else
+        PRETRAIN_FOLDER="${PRETRAIN_FOLDER}_mc"
+    fi
 fi
 
 # Output directories
@@ -415,6 +432,12 @@ if [[ "$SKIP_PRETRAIN" == false ]]; then
 
         if [[ "$MULTI_CROP" == true ]]; then
             PRETRAIN_CMD+=(--multi_crop)
+        else
+            PRETRAIN_CMD+=(--no_multi_crop)
+        fi
+
+        if [[ -n "$LOCAL_CROPS_NUMBER" ]]; then
+            PRETRAIN_CMD+=(--local_crops_number "$LOCAL_CROPS_NUMBER")
         fi
 
         if [[ "$COMPILE" == true ]]; then
