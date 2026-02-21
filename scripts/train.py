@@ -492,6 +492,7 @@ def main():
         callbacks=callbacks,
         log_every_n_steps=cfg.logging.log_every_n_steps,
         fast_dev_run=args.fast_dev_run,
+        enable_checkpointing=False,  # Disable auto-checkpoint; we save last.ckpt manually
         use_distributed_sampler=False,  # KODIAK handles its own distributed sampling
     )
 
