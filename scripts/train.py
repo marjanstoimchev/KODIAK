@@ -409,7 +409,8 @@ def main():
     base_exp_name = cfg.experiment.name
     exp_name = f"{base_exp_name}_proto{num_prototypes}_koleo{koleo_weight}_cls{proto_cls_weight}"
     if multi_crop:
-        exp_name = f"{exp_name}_mc"
+        local_crops_number = cfg.data.get("local_crops_number", 8)
+        exp_name = f"{exp_name}_mc{local_crops_number}"
 
     # Update config with constructed experiment name
     cfg.experiment.name = exp_name
