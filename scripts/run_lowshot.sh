@@ -40,6 +40,8 @@ MAX_EPOCHS=""    # empty = use low-shot default (100)
 BATCH_SIZE=""
 LEARNING_RATE=""
 OUTPUT_DIR=""
+CKPT_BASE_DIR="output_proto_analysis"  # base dir for kodiak checkpoints
+PROTOTYPES="128"                        # number of prototypes (e.g. 64, 128, 256, 512, 1024, 2048, 4096)
 DRY_RUN=false
 
 # ─────────────────────────────────────────────────────────────────────
@@ -64,6 +66,8 @@ Optional:
   --batch-size N          Override batch size
   --learning-rate LR      Override learning rate
   --output-dir DIR        Override output directory
+  --ckpt-base-dir DIR     Base dir for kodiak checkpoints (default: $CKPT_BASE_DIR)
+  --prototypes N          Number of prototypes (default: $PROTOTYPES)
   --dry-run               Print commands without executing
   --help                  Show this help
 
@@ -76,6 +80,9 @@ Examples:
 
   # From-scratch checkpoints
   $0 --gpus 0 --init-mode scratch
+
+  # Custom prototypes and checkpoint dir
+  $0 --gpus 0 --methods kodiak --datasets cifar100 --prototypes 256 --ckpt-base-dir output_proto_analysis
 EOF
     exit 1
 }
@@ -97,6 +104,8 @@ while [[ $# -gt 0 ]]; do
         --batch-size)     BATCH_SIZE="$2";    shift 2 ;;
         --learning-rate)  LEARNING_RATE="$2"; shift 2 ;;
         --output-dir)     OUTPUT_DIR="$2";    shift 2 ;;
+        --ckpt-base-dir)  CKPT_BASE_DIR="$2"; shift 2 ;;
+        --prototypes)     PROTOTYPES="$2";    shift 2 ;;
         --dry-run)        DRY_RUN=true;       shift   ;;
         --help|-h)        usage ;;
         *)                echo "Unknown option: $1"; usage ;;
@@ -120,6 +129,10 @@ declare -A CONFIG_DIRS=(
     ["dtd"]="DTD"
     ["eurosat"]="eurosat"
     ["oxford_pets"]="oxford_pets"
+    ["cifar100"]="cifar100"
+    ["nctcrche100k"]="NCTCRCHE100K"
+    ["imagenet1k"]="imagenet1k"
+    ["pancreatic"]="pancreatic"
 )
 
 # ── Checkpoint finder ────────────────────────────────────────────────
@@ -134,9 +147,9 @@ find_ssl_checkpoint() {
     case "$method" in
         kodiak)
             if [[ "$INIT_MODE" == "continued" ]]; then
-                ckpt="output/checkpoints/pretraining/${dataset}/kodiak_${dataset}_continued_proto128_koleo0.1_cls1.0_mc/last.ckpt"
+                ckpt="${CKPT_BASE_DIR}/checkpoints/pretraining/${dataset}/kodiak_${dataset}_continued_proto${PROTOTYPES}_koleo0.1_cls1.0_mc/last.ckpt"
             else
-                ckpt="output/checkpoints/pretraining/${dataset}/kodiak_${dataset}_proto128_koleo0.1_cls1.0_mc/last.ckpt"
+                ckpt="${CKPT_BASE_DIR}/checkpoints/pretraining/${dataset}/kodiak_${dataset}_proto${PROTOTYPES}_koleo0.1_cls1.0_mc/last.ckpt"
             fi
             ;;
         dinov3)

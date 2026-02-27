@@ -249,7 +249,7 @@ Evaluates SSL representations with limited labelled data (k examples per class).
 
 #### Fine-Tuning + Linear Eval on CIFAR-100 (continued)
 
-**Fine-tuning (LR 1e-4):**
+**Fine-tuning (LR 1e-4, 128 prototypes):**
 
 ```bash
 USE_SINGULARITY=true \
@@ -260,6 +260,8 @@ MODE=finetune \
 LEARNING_RATE=1e-4 \
 MAX_EPOCHS=50 \
 BATCH_SIZE=128 \
+CKPT_BASE_DIR=output_proto_analysis \
+PROTOTYPES=128 \
 sbatch scripts/slurm/run_lowshot.sh
 ```
 
@@ -274,7 +276,25 @@ MODE=lineareval \
 LEARNING_RATE=1e-3 \
 MAX_EPOCHS=50 \
 BATCH_SIZE=128 \
+CKPT_BASE_DIR=output_proto_analysis \
+PROTOTYPES=128 \
 sbatch scripts/slurm/run_lowshot.sh
+```
+
+**Custom prototypes (e.g. 256):**
+
+```bash
+USE_SINGULARITY=true \
+INIT_MODE=continued \
+DATASETS=cifar100 \
+SHOTS="1 2 4 8 16" \
+MODE=finetune \
+LEARNING_RATE=1e-4 \
+MAX_EPOCHS=50 \
+BATCH_SIZE=128 \
+CKPT_BASE_DIR=output_proto_analysis \
+PROTOTYPES=256 \
+sbatch --constraint h100 scripts/slurm/run_lowshot.sh
 ```
 
 #### Pancreatic (continued)
@@ -289,6 +309,8 @@ MODE=finetune \
 LEARNING_RATE=1e-4 \
 MAX_EPOCHS=50 \
 BATCH_SIZE=64 \
+CKPT_BASE_DIR=output_proto_analysis \
+PROTOTYPES=128 \
 sbatch scripts/slurm/run_lowshot.sh
 
 # Linear eval
@@ -300,6 +322,8 @@ MODE=lineareval \
 LEARNING_RATE=1e-3 \
 MAX_EPOCHS=50 \
 BATCH_SIZE=64 \
+CKPT_BASE_DIR=output_proto_analysis \
+PROTOTYPES=128 \
 sbatch scripts/slurm/run_lowshot.sh
 ```
 
@@ -315,6 +339,8 @@ MODE=finetune \
 LEARNING_RATE=1e-4 \
 MAX_EPOCHS=50 \
 BATCH_SIZE=128 \
+CKPT_BASE_DIR=output_proto_analysis \
+PROTOTYPES=128 \
 sbatch scripts/slurm/run_lowshot.sh
 ```
 
@@ -333,6 +359,8 @@ sbatch scripts/slurm/run_lowshot.sh
 | `BATCH_SIZE` | from config | Batch size |
 | `LEARNING_RATE` | from config | Learning rate |
 | `OUTPUT_DIR` | auto | Override output directory |
+| `CKPT_BASE_DIR` | output_proto_analysis | Base directory for kodiak checkpoints |
+| `PROTOTYPES` | 128 | Number of prototypes (64, 128, 256, 512, 1024, 2048, 4096) |
 | `USE_SINGULARITY` | false | Use Singularity container |
 | `SIF_IMAGE` | `$HOME/deeplearning.sif` | Container image path |
 
@@ -482,18 +510,26 @@ Requires an existing pretrained checkpoint.
 
 ### 5. Few-Shot (Low-Shot) Evaluation
 
-#### CIFAR-100 (continued)
+#### CIFAR-100 (continued, 128 prototypes)
 
 ```bash
 # Fine-tuning (LR 1e-4, 50 epochs)
 ./scripts/run_lowshot.sh --gpus 0 --methods kodiak --datasets cifar100 \
     --shots "1 2 4 8 16" --mode finetune --init-mode continued \
-    --learning-rate 1e-4 --max-epochs 50 --batch-size 128
+    --learning-rate 1e-4 --max-epochs 50 --batch-size 128 \
+    --ckpt-base-dir output_proto_analysis --prototypes 128
 
 # Linear eval (LR 1e-3, 50 epochs)
 ./scripts/run_lowshot.sh --gpus 0 --methods kodiak --datasets cifar100 \
     --shots "1 2 4 8 16" --mode lineareval --init-mode continued \
-    --learning-rate 1e-3 --max-epochs 50 --batch-size 128
+    --learning-rate 1e-3 --max-epochs 50 --batch-size 128 \
+    --ckpt-base-dir output_proto_analysis --prototypes 128
+
+# Custom prototypes (e.g. 256)
+./scripts/run_lowshot.sh --gpus 0 --methods kodiak --datasets cifar100 \
+    --shots "1 2 4 8 16" --mode finetune --init-mode continued \
+    --learning-rate 1e-4 --max-epochs 50 --batch-size 128 \
+    --ckpt-base-dir output_proto_analysis --prototypes 256
 ```
 
 #### Pancreatic (continued)
@@ -502,12 +538,14 @@ Requires an existing pretrained checkpoint.
 # Fine-tuning
 ./scripts/run_lowshot.sh --gpus 0 --methods kodiak --datasets pancreatic \
     --shots "1 2 4 8 16" --mode finetune --init-mode continued \
-    --learning-rate 1e-4 --max-epochs 50 --batch-size 64
+    --learning-rate 1e-4 --max-epochs 50 --batch-size 64 \
+    --ckpt-base-dir output_proto_analysis --prototypes 128
 
 # Linear eval
 ./scripts/run_lowshot.sh --gpus 0 --methods kodiak --datasets pancreatic \
     --shots "1 2 4 8 16" --mode lineareval --init-mode continued \
-    --learning-rate 1e-3 --max-epochs 50 --batch-size 64
+    --learning-rate 1e-3 --max-epochs 50 --batch-size 64 \
+    --ckpt-base-dir output_proto_analysis --prototypes 128
 ```
 
 #### From Scratch Checkpoints
@@ -516,7 +554,8 @@ Requires an existing pretrained checkpoint.
 # Fine-tuning on multiple datasets
 ./scripts/run_lowshot.sh --gpus 0 --methods kodiak --datasets "cifar100 dtd" \
     --shots "1 2 4 8 16" --mode finetune --init-mode scratch \
-    --learning-rate 1e-4 --max-epochs 50 --batch-size 128
+    --learning-rate 1e-4 --max-epochs 50 --batch-size 128 \
+    --ckpt-base-dir output_proto_analysis --prototypes 128
 ```
 
 ---
@@ -800,6 +839,8 @@ Runs k-shot evaluation sweep as a SLURM job (1 GPU, 3 days).
 | `BATCH_SIZE` | Batch size | from config |
 | `LEARNING_RATE` | Learning rate | from config |
 | `OUTPUT_DIR` | Override output directory | auto |
+| `CKPT_BASE_DIR` | Base directory for kodiak checkpoints | output_proto_analysis |
+| `PROTOTYPES` | Number of prototypes (64, 128, 256, 512, 1024, 2048, 4096) | 128 |
 | `USE_SINGULARITY` | Use Singularity container | false |
 | `SIF_IMAGE` | Singularity `.sif` image path | `$HOME/deeplearning.sif` |
 

@@ -17,6 +17,8 @@
 #   BATCH_SIZE        Override batch size
 #   LEARNING_RATE     Override learning rate
 #   OUTPUT_DIR        Override output directory
+#   CKPT_BASE_DIR     Base dir for kodiak checkpoints (default: output_proto_analysis)
+#   PROTOTYPES        Number of prototypes (default: 128)
 #   USE_SINGULARITY   Set to "true" to run inside a Singularity container
 #   SIF_IMAGE         Path to .sif image (default: $HOME/deeplearning.sif)
 #
@@ -79,6 +81,8 @@ MAX_EPOCHS="${MAX_EPOCHS:-}"
 BATCH_SIZE="${BATCH_SIZE:-}"
 LEARNING_RATE="${LEARNING_RATE:-}"
 OUTPUT_DIR="${OUTPUT_DIR:-}"
+CKPT_BASE_DIR="${CKPT_BASE_DIR:-output_proto_analysis}"
+PROTOTYPES="${PROTOTYPES:-128}"
 
 # Singularity container setup (optional)
 SIF_IMAGE="${SIF_IMAGE:-$HOME/deeplearning.sif}"
@@ -112,6 +116,8 @@ fi
 [ -n "$BATCH_SIZE" ] && echo "Batch size:      $BATCH_SIZE"
 [ -n "$LEARNING_RATE" ] && echo "Learning rate:   $LEARNING_RATE"
 [ -n "$OUTPUT_DIR" ] && echo "Output dir:      $OUTPUT_DIR"
+echo "Ckpt base dir:   $CKPT_BASE_DIR"
+echo "Prototypes:      $PROTOTYPES"
 echo "Start time:      $(date)"
 echo "============================================================"
 echo ""
@@ -138,7 +144,7 @@ export SLURM_JOB_NAME="bash"
 # =============================================================================
 # Build command
 # =============================================================================
-CMD="./scripts/run_lowshot.sh --gpus 0 --init-mode $INIT_MODE --methods '$METHODS' --datasets '$DATASETS' --shots '$SHOTS' --label-seeds '$LABEL_SEEDS' --train-seeds '$TRAIN_SEEDS'"
+CMD="./scripts/run_lowshot.sh --gpus 0 --init-mode $INIT_MODE --methods '$METHODS' --datasets '$DATASETS' --shots '$SHOTS' --label-seeds '$LABEL_SEEDS' --train-seeds '$TRAIN_SEEDS' --ckpt-base-dir $CKPT_BASE_DIR --prototypes $PROTOTYPES"
 [ -n "$MODE" ] && CMD="$CMD --mode $MODE"
 [ -n "$MAX_EPOCHS" ] && CMD="$CMD --max-epochs $MAX_EPOCHS"
 [ -n "$BATCH_SIZE" ] && CMD="$CMD --batch-size $BATCH_SIZE"
