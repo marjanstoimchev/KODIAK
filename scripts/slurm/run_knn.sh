@@ -1,32 +1,38 @@
 #!/bin/bash
 
-#SBATCH --job-name=proto
-#SBATCH --output=logs/slurm-%j.out
-#SBATCH --error=logs/slurm-%j.err
+#SBATCH --job-name=knn
+#SBATCH --output=logs/slurm-knn-%j.out
+#SBATCH --error=logs/slurm-knn-%j.err
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=22
-#SBATCH --gres=gpu:2
-#SBATCH --time=4-00:00:00
+#SBATCH --gres=gpu:1
+#SBATCH --time=1:00:00
 #SBATCH --mem=64G
 #SBATCH --partition=gpu
 
 # =============================================================================
-# KODIAK Experiment Runner - SLURM Script
+# KODIAK k-NN Evaluation - SLURM Script
 # =============================================================================
-# Runs the full KODIAK pipeline (pretrain + classify) as a single SLURM job.
+# Runs k-NN evaluation on pretrained SSL checkpoints via SLURM.
 # All parameters are configurable via environment variables.
 #
 # Usage:
-#   NUM_PROTOTYPES=128 sbatch scripts/slurm/run_experiment.sh
+#   # Scratch mode
+#   NUM_PROTOTYPES=128 DATASET=cifar100 \
+#       sbatch scripts/slurm/run_knn.sh
 #
-#   # Override any parameter:
-#   DATASET=eurosat NUM_PROTOTYPES=256 PRETRAIN_EPOCHS=300 \
-#       sbatch scripts/slurm/run_experiment.sh
+#   # Continued mode
+#   NUM_PROTOTYPES=128 DATASET=cifar100 INIT_MODE=continued \
+#       sbatch scripts/slurm/run_knn.sh
 #
-#   # Use Singularity container:
-#   USE_SINGULARITY=true SIF_IMAGE=/path/to/deeplearning.sif \
-#       NUM_PROTOTYPES=128 sbatch scripts/slurm/run_experiment.sh
+#   # With Singularity container
+#   USE_SINGULARITY=true NUM_PROTOTYPES=128 DATASET=cifar100 \
+#       sbatch scripts/slurm/run_knn.sh
+#
+#   # Custom checkpoint path
+#   DATASET=cifar100 PRETRAINED_PATH=/path/to/checkpoint.ckpt \
+#       sbatch scripts/slurm/run_knn.sh
 # =============================================================================
 
 # Navigate to repo root (where sbatch was submitted from)
@@ -50,7 +56,7 @@ fi
 # Print job info
 # =============================================================================
 echo "============================================================"
-echo "KODIAK Experiment Runner (SLURM)"
+echo "KODIAK k-NN Evaluation (SLURM)"
 echo "============================================================"
 echo "SLURM Job ID:    $SLURM_JOB_ID"
 echo "Node:            $SLURM_NODELIST"
@@ -67,68 +73,44 @@ echo ""
 # Configuration (override via environment variables)
 # =============================================================================
 DATASET="${DATASET:-dtd}"
-
-# Single prototype count per job (required)
+INIT_MODE="${INIT_MODE:-scratch}"
 NUM_PROTOTYPES="${NUM_PROTOTYPES:-}"
-if [[ -z "$NUM_PROTOTYPES" ]]; then
-    echo "ERROR: NUM_PROTOTYPES environment variable is required."
-    echo "Usage: NUM_PROTOTYPES=128 sbatch scripts/slurm/run_experiment.sh"
+PRETRAINED_PATH="${PRETRAINED_PATH:-}"
+CHECKPOINT_TYPE="${CHECKPOINT_TYPE:-last}"
+K="${K:-20}"
+TEMPERATURE="${TEMPERATURE:-0.07}"
+BATCH_SIZE="${BATCH_SIZE:-256}"
+KOLEO_WEIGHT="${KOLEO_WEIGHT:-0.1}"
+CLS_WEIGHT="${CLS_WEIGHT:-1.0}"
+MULTI_CROP="${MULTI_CROP:-true}"
+CONCAT_CLS_PATCH="${CONCAT_CLS_PATCH:-false}"
+OUTPUT_BASE_DIR="${OUTPUT_BASE_DIR:-output}"
+SEEDS="${SEEDS:-0 1 42}"
+
+# Require either NUM_PROTOTYPES or PRETRAINED_PATH
+if [[ -z "$NUM_PROTOTYPES" && -z "$PRETRAINED_PATH" ]]; then
+    echo "ERROR: NUM_PROTOTYPES or PRETRAINED_PATH environment variable is required."
+    echo "Usage: NUM_PROTOTYPES=128 sbatch scripts/slurm/run_knn.sh"
     exit 1
 fi
 
-# Detect number of GPUs from SLURM allocation
-if [[ -n "$SLURM_GPUS_ON_NODE" ]]; then
-    NUM_GPUS="$SLURM_GPUS_ON_NODE"
-elif [[ -n "$CUDA_VISIBLE_DEVICES" ]]; then
-    NUM_GPUS=$(echo "$CUDA_VISIBLE_DEVICES" | tr ',' '\n' | wc -l)
-else
-    NUM_GPUS=1
-fi
-
-# Build GPU list as 0,1,2... (local indices after SLURM remapping)
-GPUS=$(seq -s',' 0 $((NUM_GPUS - 1)))
-echo "Detected $NUM_GPUS GPUs, using indices: $GPUS"
-
-# Configuration
-INIT_MODE="${INIT_MODE:-scratch}"
-SEEDS="${SEEDS:-0 1 42}"
-PRETRAIN_SEED="${PRETRAIN_SEED:-42}"
-PRETRAIN_EPOCHS="${PRETRAIN_EPOCHS:-500}"
-PRETRAIN_LR="${PRETRAIN_LR:-0.0001}"
-CLASSIFY_EPOCHS="${CLASSIFY_EPOCHS:-100}"
-CLASSIFY_LR="${CLASSIFY_LR:-0.0001}"
-CLASSIFY_MODE="${CLASSIFY_MODE:-finetune}"
-BATCH_SIZE="${BATCH_SIZE:-128}"
-KOLEO_WEIGHT="${KOLEO_WEIGHT:-0.1}"
-CLS_WEIGHT="${CLS_WEIGHT:-1.0}"
-OUTPUT_DIR="${OUTPUT_DIR:-output_proto_analysis}"
-MULTI_CROP="${MULTI_CROP:-true}"
-COMPILE="${COMPILE:-false}"
-SKIP_PRETRAIN="${SKIP_PRETRAIN:-false}"
-SKIP_CLASSIFY="${SKIP_CLASSIFY:-false}"
-PRETRAINED_PATH="${PRETRAINED_PATH:-}"
-SAVE_EVERY_N_EPOCHS="${SAVE_EVERY_N_EPOCHS:-}"
-LOGGER="${LOGGER:-csv}"
+# Detect GPU index (k-NN uses single GPU)
+GPUS="0"
 
 echo "Dataset:          $DATASET"
-echo "GPUs:             $GPUS"
-echo "Num prototypes:   $NUM_PROTOTYPES"
 echo "Init mode:        $INIT_MODE"
-echo "Seeds:            $SEEDS"
-echo "Pretrain seed:    $PRETRAIN_SEED"
-echo "Pretrain epochs:  $PRETRAIN_EPOCHS"
-echo "Pretrain LR:      $PRETRAIN_LR"
-echo "Classify epochs:  $CLASSIFY_EPOCHS"
-echo "Classify LR:      $CLASSIFY_LR"
-echo "Classify mode:    $CLASSIFY_MODE"
+echo "GPU:              $GPUS"
+echo "Num prototypes:   $NUM_PROTOTYPES"
+echo "Checkpoint type:  $CHECKPOINT_TYPE"
+echo "k:                $K"
+echo "Temperature:      $TEMPERATURE"
 echo "Batch size:       $BATCH_SIZE"
 echo "KoLeo weight:     $KOLEO_WEIGHT"
 echo "CLS weight:       $CLS_WEIGHT"
 echo "Multi-crop:       $MULTI_CROP"
-echo "torch.compile:    $COMPILE"
-echo "Output dir:       $OUTPUT_DIR"
-echo "Skip pretrain:    $SKIP_PRETRAIN"
-echo "Skip classify:    $SKIP_CLASSIFY"
+echo "Concat CLS+Patch: $CONCAT_CLS_PATCH"
+echo "Output base dir:  $OUTPUT_BASE_DIR"
+echo "Seeds:            $SEEDS"
 if [[ -n "$PRETRAINED_PATH" ]]; then
     echo "Pretrained path:  $PRETRAINED_PATH"
 fi
@@ -154,64 +136,48 @@ mkdir -p "$SHM_DIR"
 # =============================================================================
 # Build command arguments
 # =============================================================================
-SWEEP_ARGS=(
+KNN_ARGS=(
     --dataset "$DATASET"
     --gpus "$GPUS"
     --init-mode "$INIT_MODE"
-    --seeds "$SEEDS"
-    --pretrain-seed "$PRETRAIN_SEED"
-    --pretrain-epochs "$PRETRAIN_EPOCHS"
-    --pretrain-lr "$PRETRAIN_LR"
-    --classify-epochs "$CLASSIFY_EPOCHS"
-    --classify-lr "$CLASSIFY_LR"
-    --classify-mode "$CLASSIFY_MODE"
+    --checkpoint-type "$CHECKPOINT_TYPE"
+    --k "$K"
+    --temperature "$TEMPERATURE"
     --batch-size "$BATCH_SIZE"
-    --num-prototypes "$NUM_PROTOTYPES"
     --koleo-weight "$KOLEO_WEIGHT"
     --cls-weight "$CLS_WEIGHT"
-    --output-dir "$OUTPUT_DIR"
+    --output-base-dir "$OUTPUT_BASE_DIR"
+    --seeds "$SEEDS"
 )
 
-if [[ "$SKIP_PRETRAIN" == "true" ]]; then
-    SWEEP_ARGS+=(--skip-pretrain)
-fi
-
-if [[ "$SKIP_CLASSIFY" == "true" ]]; then
-    SWEEP_ARGS+=(--skip-classify)
+if [[ -n "$NUM_PROTOTYPES" ]]; then
+    KNN_ARGS+=(--num-prototypes "$NUM_PROTOTYPES")
 fi
 
 if [[ -n "$PRETRAINED_PATH" ]]; then
-    SWEEP_ARGS+=(--pretrained-path "$PRETRAINED_PATH")
+    KNN_ARGS+=(--pretrained-path "$PRETRAINED_PATH")
 fi
 
 if [[ "$MULTI_CROP" == "true" ]]; then
-    SWEEP_ARGS+=(--multi-crop)
-fi
-
-if [[ "$COMPILE" == "true" ]]; then
-    SWEEP_ARGS+=(--compile)
+    KNN_ARGS+=(--multi-crop)
 else
-    SWEEP_ARGS+=(--no-compile)
+    KNN_ARGS+=(--no-multi-crop)
 fi
 
-if [[ -n "$SAVE_EVERY_N_EPOCHS" ]]; then
-    SWEEP_ARGS+=(--save-every "$SAVE_EVERY_N_EPOCHS")
+if [[ "$CONCAT_CLS_PATCH" == "true" ]]; then
+    KNN_ARGS+=(--concat-cls-patch)
 fi
-
-SWEEP_ARGS+=(--logger "$LOGGER")
 
 # =============================================================================
-# Run sweep
+# Run k-NN evaluation
 # =============================================================================
 
 # IMPORTANT: Disable PyTorch Lightning's SLURM auto-detection
-# Lightning expects ntasks-per-node == num_gpus, but we want Lightning to handle
-# multi-GPU DDP internally within a single SLURM task
 unset SLURM_NTASKS
 unset SLURM_PROCID
 unset SLURM_LOCALID
 unset SLURM_NODEID
-export SLURM_JOB_NAME="bash"  # Trick Lightning into thinking this isn't a SLURM job
+export SLURM_JOB_NAME="bash"
 
 if [[ "$USE_SINGULARITY" == "true" ]]; then
     # Export environment variables for Singularity
@@ -227,17 +193,16 @@ if [[ "$USE_SINGULARITY" == "true" ]]; then
         --bind "$TORCH_HOME":"$TORCH_HOME" \
         --bind "$SHM_DIR":/dev/shm \
         "$SIF_IMAGE" \
-        ./scripts/run_sweep.sh "${SWEEP_ARGS[@]}"
+        ./scripts/run_knn.sh "${KNN_ARGS[@]}"
 else
-    # Run with srun (inherits GPU allocation from SLURM)
-    srun ./scripts/run_sweep.sh "${SWEEP_ARGS[@]}"
+    srun ./scripts/run_knn.sh "${KNN_ARGS[@]}"
 fi
 
 EXIT_CODE=$?
 
 echo ""
 echo "============================================================"
-echo "KODIAK experiment (proto=$NUM_PROTOTYPES) finished with exit code: $EXIT_CODE"
+echo "KODIAK k-NN evaluation finished with exit code: $EXIT_CODE"
 echo "End time: $(date)"
 echo "============================================================"
 

@@ -2,39 +2,28 @@
 
 PyTorch Lightning implementation of **KODIAK** — a self-supervised learning method combining masked image modeling with prototype learning using a teacher-student architecture.
 
----
+## Architecture
 
-## Table of Contents
+Uses a **DINOv3 ViT-Small/16** backbone:
+- Embedding dimension: 384
+- Depth: 12 blocks
+- Attention heads: 6
+- Positional encoding: RoPE
+- Register tokens: 4
 
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-- [Full Pipeline](#full-pipeline)
-- [Training Modes](#training-modes)
-  - [From Scratch](#from-scratch)
-  - [Continued from DINOv3](#continued-from-dinov3)
-  - [Classification Only (Skip Pretraining)](#classification-only-skip-pretraining)
-- [Scripts Reference](#scripts-reference)
-  - [train.py — Pretraining](#trainpy--pretraining)
-  - [train_classifier.py — Classification](#train_classifierpy--classification)
-  - [eval_knn.py — k-NN Evaluation](#eval_knnpy--k-nn-evaluation)
-  - [eval_lowshot.py — K-Shot Evaluation](#eval_lowshotpy--k-shot-evaluation)
-  - [run_sweep.sh — Full Pipeline](#run_sweepsh--full-pipeline)
-  - [run_knn.sh — k-NN Wrapper](#run_knnsh--k-nn-wrapper)
-  - [run_ablation.sh — Ablation Studies](#run_ablationsh--ablation-studies)
-  - [run_lowshot.sh — K-Shot Wrapper](#run_lowshotsh--k-shot-wrapper)
-- [SLURM Scripts](#slurm-scripts)
-  - [run_experiment.sh — Single SLURM Job](#run_experimentsh--single-slurm-job)
-  - [run_proto_analysis.sh — Prototype Sweep](#run_proto_analysissh--prototype-sweep)
-  - [run_sweep.sh (SLURM)](#run_sweepsh-slurm)
-  - [run_ablation.sh (SLURM)](#run_ablationsh-slurm)
-- [Supported Datasets](#supported-datasets)
-- [Configuration](#configuration)
-- [Output Structure](#output-structure)
-- [Logging](#logging)
-- [Project Structure](#project-structure)
-- [Citation](#citation)
+## Supported Datasets
 
----
+| Dataset | Type | Classes | Source |
+|---------|------|---------|--------|
+| **Pancreatic** | Custom folder | 7 | Local: `/home/marjans/Datasets/pancreatic/SLIDE-3210` |
+| CIFAR-100 | HuggingFace | 100 | `uoft-cs/cifar100` |
+| DTD | HuggingFace | 47 | `cansa/Describable-Textures-Dataset-DTD` |
+| EuroSAT | HuggingFace | 10 | `blanchon/EuroSAT_RGB` |
+| Oxford Pets | HuggingFace | 37 | `timm/oxford-iiit-pet` |
+| NCT-CRC-HE-100K | HuggingFace | 9 | `DykeF/NCTCRCHE100K` |
+| ImageNet-1K | HuggingFace | 1000 | `ILSVRC/imagenet-1k` |
+
+See [DATASETS.md](DATASETS.md) for full dataset documentation and per-dataset copy-paste commands.
 
 ## Installation
 
@@ -44,151 +33,350 @@ cd KODIAK
 pip install -r requirements.txt
 ```
 
-### Requirements
+---
 
-- Python 3.10+
-- PyTorch 2.0+
-- PyTorch Lightning 2.0+
-- CUDA-capable GPU(s)
+## Quick Start (Copy-Paste Examples)
+
+All examples below use SLURM with a Singularity container (`deeplearning.sif`). Remove `USE_SINGULARITY=true` to run without a container.
+
+### Recommended Hyperparameters
+
+| Setting | Value |
+|---------|-------|
+| Pretraining from scratch | 500 epochs |
+| Pretraining continued (from DINOv3 weights) | 100 epochs |
+| Classification fine-tuning (after scratch) | 100 epochs, LR = 1e-4 |
+| Classification fine-tuning (after continued) | 50 epochs, LR = 1e-4 |
+| Classification linear eval (any source) | 50 epochs, LR = 1e-3 |
+| Batch size (HuggingFace datasets) | 128 |
+| Batch size (Pancreatic, 256x256) | 64 |
 
 ---
 
-## Quick Start
+### 1. Full Pipeline: Pretrain + Classify
 
-### Pretraining
+The pipeline script runs pretraining followed by multi-seed classification in a single job.
+
+#### From Scratch (500 pretrain epochs + 100 classify epochs)
+
+**Fine-tuning:**
 
 ```bash
-python scripts/train.py \
-    --config configs/DTD/pretrain.yaml \
-    --devices 0,1 \
-    --logger tensorboard
+# Pancreatic — fine-tuning after scratch pretraining
+USE_SINGULARITY=true \
+NUM_PROTOTYPES=128 \
+DATASET=pancreatic \
+INIT_MODE=scratch \
+PRETRAIN_EPOCHS=500 \
+CLASSIFY_EPOCHS=100 \
+CLASSIFY_LR=1e-4 \
+CLASSIFY_MODE=finetune \
+BATCH_SIZE=64 \
+sbatch scripts/slurm/run_experiment.sh
 ```
 
-### Classification
+**Linear evaluation:**
 
 ```bash
-python scripts/train_classifier.py \
-    --config configs/DTD/classify.yaml \
-    --pretrained_path output/checkpoints/pretraining/dtd/last.ckpt \
-    --logger tensorboard
+# CIFAR-100 — linear eval after scratch pretraining
+USE_SINGULARITY=true \
+NUM_PROTOTYPES=128 \
+DATASET=cifar100 \
+INIT_MODE=scratch \
+PRETRAIN_EPOCHS=500 \
+CLASSIFY_EPOCHS=50 \
+CLASSIFY_LR=1e-3 \
+CLASSIFY_MODE=lineareval \
+BATCH_SIZE=128 \
+sbatch scripts/slurm/run_experiment.sh
+```
+
+#### Continued Pretraining (100 pretrain epochs + 50 classify epochs)
+
+Continued pretraining initializes from DINOv3 off-the-shelf weights.
+
+**Fine-tuning:**
+
+```bash
+# Pancreatic — fine-tuning after continued pretraining
+USE_SINGULARITY=true \
+NUM_PROTOTYPES=128 \
+DATASET=pancreatic \
+INIT_MODE=continued \
+PRETRAIN_EPOCHS=100 \
+CLASSIFY_EPOCHS=50 \
+CLASSIFY_LR=1e-4 \
+CLASSIFY_MODE=finetune \
+BATCH_SIZE=64 \
+sbatch scripts/slurm/run_experiment.sh
+```
+
+**Linear evaluation:**
+
+```bash
+# DTD — linear eval after continued pretraining
+USE_SINGULARITY=true \
+NUM_PROTOTYPES=128 \
+DATASET=dtd \
+INIT_MODE=continued \
+PRETRAIN_EPOCHS=100 \
+CLASSIFY_EPOCHS=50 \
+CLASSIFY_LR=1e-3 \
+CLASSIFY_MODE=lineareval \
+BATCH_SIZE=128 \
+sbatch scripts/slurm/run_experiment.sh
+```
+
+---
+
+### 2. Pretraining Only
+
+```bash
+# From scratch — 500 epochs
+USE_SINGULARITY=true \
+NUM_PROTOTYPES=128 \
+DATASET=pancreatic \
+INIT_MODE=scratch \
+PRETRAIN_EPOCHS=500 \
+SKIP_CLASSIFY=true \
+BATCH_SIZE=64 \
+sbatch scripts/slurm/run_experiment.sh
+
+# Continued from DINOv3 weights — 100 epochs
+USE_SINGULARITY=true \
+NUM_PROTOTYPES=128 \
+DATASET=pancreatic \
+INIT_MODE=continued \
+PRETRAIN_EPOCHS=100 \
+SKIP_CLASSIFY=true \
+BATCH_SIZE=64 \
+sbatch scripts/slurm/run_experiment.sh
+```
+
+---
+
+### 3. Classification Only (Skip Pretraining)
+
+Requires an existing pretrained checkpoint.
+
+**Fine-tuning (from scratch checkpoint):**
+
+```bash
+USE_SINGULARITY=true \
+NUM_PROTOTYPES=128 \
+DATASET=pancreatic \
+INIT_MODE=scratch \
+SKIP_PRETRAIN=true \
+CLASSIFY_MODE=finetune \
+CLASSIFY_LR=1e-4 \
+CLASSIFY_EPOCHS=100 \
+BATCH_SIZE=64 \
+sbatch scripts/slurm/run_experiment.sh
+```
+
+**Linear evaluation (from scratch checkpoint):**
+
+```bash
+USE_SINGULARITY=true \
+NUM_PROTOTYPES=128 \
+DATASET=pancreatic \
+INIT_MODE=scratch \
+SKIP_PRETRAIN=true \
+CLASSIFY_MODE=lineareval \
+CLASSIFY_LR=1e-3 \
+CLASSIFY_EPOCHS=50 \
+BATCH_SIZE=64 \
+sbatch scripts/slurm/run_experiment.sh
+```
+
+**From continued checkpoint:**
+
+```bash
+# Fine-tuning from continued checkpoint
+USE_SINGULARITY=true \
+NUM_PROTOTYPES=128 \
+DATASET=pancreatic \
+INIT_MODE=continued \
+SKIP_PRETRAIN=true \
+CLASSIFY_MODE=finetune \
+CLASSIFY_LR=1e-4 \
+CLASSIFY_EPOCHS=50 \
+BATCH_SIZE=64 \
+sbatch scripts/slurm/run_experiment.sh
+
+# Linear eval from continued checkpoint
+USE_SINGULARITY=true \
+NUM_PROTOTYPES=128 \
+DATASET=pancreatic \
+INIT_MODE=continued \
+SKIP_PRETRAIN=true \
+CLASSIFY_MODE=lineareval \
+CLASSIFY_LR=1e-3 \
+CLASSIFY_EPOCHS=50 \
+BATCH_SIZE=64 \
+sbatch scripts/slurm/run_experiment.sh
+```
+
+---
+
+### 4. k-NN Evaluation
+
+k-NN uses frozen features (no training). Evaluates representation quality directly.
+
+```bash
+# k-NN from scratch checkpoint
+USE_SINGULARITY=true \
+NUM_PROTOTYPES=128 \
+DATASET=pancreatic \
+INIT_MODE=scratch \
+OUTPUT_BASE_DIR=output_proto_analysis \
+sbatch scripts/slurm/run_knn.sh
+
+# k-NN from continued checkpoint
+USE_SINGULARITY=true \
+NUM_PROTOTYPES=128 \
+DATASET=pancreatic \
+INIT_MODE=continued \
+OUTPUT_BASE_DIR=output_proto_analysis \
+sbatch scripts/slurm/run_knn.sh
+```
+
+---
+
+### 5. Ablation Studies
+
+See [ABLATIONS.md](ABLATIONS.md) for full ablation documentation.
+
+```bash
+# Run all ablations on Pancreatic
+for ABL in full no_sinkhorn no_cls_loss no_koleo; do
+    ABLATION=$ABL \
+    DATASET=pancreatic \
+    PRETRAIN_EPOCHS=500 \
+    CLASSIFY_EPOCHS=100 \
+    BATCH_SIZE=64 \
+    NUM_PROTOTYPES=1024 \
+    USE_SINGULARITY=true \
+    sbatch scripts/slurm/run_ablation.sh
+done
+```
+
+---
+
+## Non-SLURM Usage
+
+All scripts have non-SLURM equivalents. Use these on a machine with GPUs directly.
+
+### Full Pipeline
+
+```bash
+# From scratch: pretrain + fine-tune
+./scripts/run_sweep.sh --dataset pancreatic --gpus 0,1 \
+    --init-mode scratch --pretrain-epochs 500 --classify-epochs 100 \
+    --classify-lr 1e-4 --classify-mode finetune \
+    --batch-size 64 --num-prototypes 128 --seeds "0 1 42"
+
+# Continued: pretrain + linear eval
+./scripts/run_sweep.sh --dataset pancreatic --gpus 0,1 \
+    --init-mode continued --pretrain-epochs 100 --classify-epochs 50 \
+    --classify-lr 1e-3 --classify-mode lineareval \
+    --batch-size 64 --num-prototypes 128 --seeds "0 1 42"
+```
+
+### Classification Only
+
+```bash
+# Fine-tuning from scratch checkpoint (LR 1e-4, 100 epochs)
+./scripts/run_sweep.sh --dataset pancreatic --gpus 0,1 \
+    --skip-pretrain --classify-epochs 100 --classify-lr 1e-4 \
+    --classify-mode finetune --batch-size 64 --num-prototypes 128 --seeds "0 1 42"
+
+# Linear eval from scratch checkpoint (LR 1e-3, 50 epochs)
+./scripts/run_sweep.sh --dataset pancreatic --gpus 0,1 \
+    --skip-pretrain --classify-epochs 50 --classify-lr 1e-3 \
+    --classify-mode lineareval --batch-size 64 --num-prototypes 128 --seeds "0 1 42"
 ```
 
 ### k-NN Evaluation
 
 ```bash
-python scripts/eval_knn.py \
-    --config configs/DTD/classify.yaml \
-    --pretrained_path output/checkpoints/pretraining/dtd/last.ckpt
+# From scratch checkpoint
+./scripts/run_knn.sh --dataset pancreatic --gpus 0 \
+    --init-mode scratch --num-prototypes 128
+
+# From continued checkpoint
+./scripts/run_knn.sh --dataset pancreatic --gpus 0 \
+    --init-mode continued --num-prototypes 128
+```
+
+### Few-Shot Evaluation
+
+```bash
+# Fine-tuning — pancreatic, continued, LR 1e-4
+./scripts/run_lowshot.sh --gpus 0 --methods "kodiak" --datasets pancreatic \
+    --shots "2 4 8 16" --mode finetune --init-mode continued \
+    --learning-rate 1e-4 --max-epochs 50 --batch-size 64
+
+# Linear eval — pancreatic, continued, LR 1e-3
+./scripts/run_lowshot.sh --gpus 0 --methods "kodiak" --datasets pancreatic \
+    --shots "2 4 8 16" --mode lineareval --init-mode continued \
+    --learning-rate 1e-3 --max-epochs 50 --batch-size 64
 ```
 
 ---
 
-## Full Pipeline
+## Output Structure
 
-The `run_sweep.sh` script runs the complete pretrain + classify pipeline in one command:
+### Pretraining
 
-```bash
-./scripts/run_sweep.sh \
-    --dataset dtd \
-    --gpus 0,1 \
-    --pretrain-epochs 500 \
-    --classify-epochs 100 \
-    --batch-size 128 \
-    --seeds "0 1 42" \
-    --logger tensorboard
+```
+output/
+└── checkpoints/pretraining/{dataset}/{experiment_name}/
+    └── last.ckpt
 ```
 
-This works with conda, venv, or any local Python environment — no container needed.
+### Classification
+
+```
+output/
+└── logs/classification/{dataset}/{pretrain_folder}/
+    ├── finetune_seed_0/
+    │   ├── test_results.json        # final test metrics
+    │   └── training_summary.json
+    ├── finetune_seed_1/
+    ├── finetune_seed_42/
+    ├── lineareval_seed_0/           # if classify-mode=lineareval
+    ├── lineareval_seed_1/
+    └── lineareval_seed_42/
+```
+
+### k-NN
+
+```
+output/knn/{dataset}/{pretrain_folder}/
+└── knn_results.json
+
+output/knn_from_continued/{dataset}/{pretrain_folder}/
+└── knn_results.json
+```
 
 ---
 
-## Training Modes
+## Evaluation Metrics
 
-KODIAK supports three training workflows via the `--init-mode` and `--skip-pretrain` flags:
+Saved in `test_results.json` after each classification run:
 
-### From Scratch
+| Metric | Description |
+|--------|-------------|
+| `test_acc` | Top-1 accuracy |
+| `test_acc_top5` | Top-5 accuracy (when > 5 classes) |
+| `test_f1_macro` | Macro-averaged F1 |
+| `test_f1_weighted` | Weighted F1 |
+| `test_precision_macro` | Macro-averaged precision |
+| `test_recall_macro` | Macro-averaged recall |
+| `test_auroc` | Area under ROC curve |
 
-Train from random initialization (default):
-
-```bash
-./scripts/run_sweep.sh \
-    --dataset dtd \
-    --gpus 0,1 \
-    --init-mode scratch \
-    --pretrain-epochs 500 \
-    --classify-epochs 100 \
-    --batch-size 128 \
-    --seeds "0 1 42" \
-    --logger tensorboard
-```
-
-Uses `configs/{dataset}/pretrain.yaml`. The model is initialized randomly, then pretrained with KODIAK's self-supervised objective, followed by classification.
-
-### Continued from DINOv3
-
-Initialize from DINOv3 pretrained weights, then continue pretraining on the target dataset:
-
-```bash
-./scripts/run_sweep.sh \
-    --dataset dtd \
-    --gpus 0,1 \
-    --init-mode continued \
-    --pretrain-epochs 100 \
-    --classify-epochs 100 \
-    --batch-size 128 \
-    --seeds "0 1 42" \
-    --logger tensorboard
-```
-
-Uses `configs/{dataset}/pretrain_continued.yaml`, which specifies the DINOv3 weights path:
-
-```yaml
-model:
-  pretrained_path: "dinov3_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth"
-```
-
-The DINOv3 weights are loaded into the student encoder, the teacher is initialized from the student via EMA, and pretraining continues on the target dataset. Since the model starts from strong features, fewer epochs are needed (default: 100 vs 300 for scratch).
-
-**Requirements:** Download the DINOv3 ViT-S/16 weights and place them at `dinov3_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth` (or update the path in the config).
-
-### Classification Only (Skip Pretraining)
-
-Skip pretraining entirely and run classification from an existing checkpoint:
-
-```bash
-# From a specific checkpoint file
-./scripts/run_sweep.sh \
-    --dataset dtd \
-    --gpus 0,1 \
-    --skip-pretrain \
-    --pretrained-path /path/to/checkpoint.ckpt \
-    --classify-epochs 100 \
-    --classify-lr 1e-4 \
-    --batch-size 128 \
-    --seeds "0 1 42" \
-    --logger tensorboard
-
-# Auto-detect checkpoint from a previous run (looks in the expected output directory)
-./scripts/run_sweep.sh \
-    --dataset dtd \
-    --gpus 0,1 \
-    --skip-pretrain \
-    --classify-epochs 100 \
-    --seeds "0 1 42"
-```
-
-| Flag | Description |
-|------|-------------|
-| `--skip-pretrain` | Skips pretraining entirely, jumps to classification |
-| `--pretrained-path` | Explicit path to a `.ckpt` checkpoint file. If omitted, the script looks for a checkpoint in the expected output directory from a prior pretraining run. |
-
-### Mode Comparison
-
-| Mode | Config | Weights Init | Default Epochs | Output Dir |
-|------|--------|-------------|----------------|------------|
-| `scratch` | `pretrain.yaml` | Random | 300 | `classification/` |
-| `continued` | `pretrain_continued.yaml` | DINOv3 ViT-S/16 | 100 | `classification_from_continued/` |
-| `--skip-pretrain` | — | From checkpoint | — | Based on init-mode used during pretraining |
+Model selection: best checkpoint by `val_loss` (min), early stopping on `val_loss`.
 
 ---
 
@@ -196,48 +384,38 @@ Skip pretraining entirely and run classification from an existing checkpoint:
 
 ### `train.py` — Pretraining
 
-Self-supervised pretraining with KODIAK. Uses a ViT backbone with a teacher-student architecture, masked image modeling, prototype learning, and KoLeo regularization.
+Self-supervised pretraining with KODIAK.
 
 ```bash
 python scripts/train.py \
-    --config configs/DTD/pretrain.yaml \
-    --devices 0,1,2,3 \
-    --batch_size 128 \
-    --learning_rate 1e-4 \
+    --config configs/pancreatic/pretrain.yaml \
+    --devices 0,1 \
+    --batch_size 64 \
     --max_epochs 500 \
-    --num_prototypes 4096 \
-    --koleo_weight 0.1 \
-    --cls_weight 1.0 \
+    --num_prototypes 128 \
     --multi_crop \
-    --compile \
-    --logger tensorboard \
-    --name my_experiment
+    --logger tensorboard
 ```
 
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--config` | Path to YAML config **(required)** | — |
-| `--devices` | GPU indices, comma-separated (e.g., `0,1,2,3`) or `auto` | from config |
-| `--batch_size` | Total training batch size (divided across GPUs) | from config |
+| `--devices` | GPU indices, comma-separated | from config |
+| `--batch_size` | Total batch size | from config |
 | `--learning_rate` | Peak learning rate | from config |
-| `--max_epochs` | Number of training epochs | from config |
+| `--max_epochs` | Training epochs | from config |
 | `--num_prototypes` | Number of prototype vectors | 4096 |
-| `--koleo_weight` | KoLeo regularization loss weight | 0.1 |
-| `--cls_weight` | Multi-crop CLS distillation loss weight | from config |
-| `--multi_crop` | Enable multi-crop augmentation (2 global + 8 local crops) | off |
-| `--no_sinkhorn` | Use softmax instead of Sinkhorn-Knopp normalization | off |
-| `--compile` | Enable `torch.compile()` for ~15-30% speedup | off |
-| `--no_compile` | Explicitly disable `torch.compile()` | — |
-| `--precision` | Training precision (e.g., `bf16-mixed`, `32`) | bf16-mixed |
-| `--logger` | Logger type: `csv`, `tensorboard`, or `wandb` | csv |
-| `--name` | Experiment name (used in folder paths) | from config |
-| `--resume` | Resume training from checkpoint path | — |
+| `--koleo_weight` | KoLeo regularization weight | 0.1 |
+| `--cls_weight` | Multi-crop CLS distillation weight | from config |
+| `--multi_crop` | Enable multi-crop (2 global + 8 local) | off |
+| `--no_sinkhorn` | Use softmax instead of Sinkhorn-Knopp | off |
+| `--compile` | Enable `torch.compile()` | off |
+| `--precision` | Training precision | bf16-mixed |
+| `--logger` | `csv`, `tensorboard`, or `wandb` | csv |
+| `--name` | Experiment name | from config |
+| `--resume` | Resume from checkpoint | — |
 | `--pretrained_path` | Initialize from pretrained weights | — |
-| `--save_every_n_epochs` | Save intermediate checkpoints every N epochs | — |
-| `--log_dir` | Exact log directory (full path) | auto |
-| `--log_base_dir` | Base directory for logs | auto |
-| `--checkpoint_dir` | Exact checkpoint directory (full path) | auto |
-| `--checkpoint_base_dir` | Base directory for checkpoints | auto |
+| `--save_every_n_epochs` | Save intermediate checkpoints | — |
 | `--fast_dev_run` | Quick sanity check (1 batch) | off |
 
 ### `train_classifier.py` — Classification
@@ -246,14 +424,14 @@ Fine-tuning or linear evaluation using a pretrained KODIAK encoder.
 
 ```bash
 python scripts/train_classifier.py \
-    --config configs/DTD/classify.yaml \
-    --pretrained_path output/checkpoints/pretraining/dtd/last.ckpt \
+    --config configs/pancreatic/classify.yaml \
+    --pretrained_path output/checkpoints/pretraining/pancreatic/last.ckpt \
     --devices 0,1 \
     --max_epochs 100 \
     --learning_rate 1e-4 \
-    --batch_size 128 \
+    --batch_size 64 \
     --seed 42 \
-    --encoder_type teacher \
+    --freeze_backbone \
     --logger tensorboard
 ```
 
@@ -261,10 +439,10 @@ python scripts/train_classifier.py \
 |------|-------------|---------|
 | `--config` | Path to YAML config **(required)** | — |
 | `--pretrained_path` | Pretrained checkpoint file or directory | — |
-| `--checkpoint_type` | Which checkpoint to load: `last` or `best` (lowest loss) | last |
-| `--encoder_type` | Encoder to extract from SSL checkpoint: `teacher` or `student` | teacher |
+| `--checkpoint_type` | `last` or `best` (lowest loss) | last |
+| `--encoder_type` | `teacher` or `student` | teacher |
 | `--freeze_backbone` | Freeze encoder for linear evaluation | off |
-| `--use_cls_token` | Use CLS token (`true`) or mean patch pooling (`false`) | from config |
+| `--use_cls_token` | Use CLS token or mean patch pooling | from config |
 | `--concat_cls_patch` | Concatenate CLS + mean patch tokens (2x features) | off |
 | `--devices` | GPU indices | from config |
 | `--batch_size` | Batch size | from config |
@@ -272,25 +450,18 @@ python scripts/train_classifier.py \
 | `--max_epochs` | Training epochs | from config |
 | `--precision` | Training precision | bf16-mixed |
 | `--seed` | Random seed | from config |
-| `--logger` | Logger type: `csv`, `tensorboard`, or `wandb` | csv |
-| `--name` | Experiment name | from config |
-| `--resume` | Resume from checkpoint | — |
-| `--eval_only` | Run test evaluation only (no training) | off |
-| `--exp_base_dir` | Base directory for both logs and checkpoints | — |
-| `--log_dir` | Exact log directory (full path) | auto |
-| `--log_base_dir` | Base directory for logs | auto |
-| `--checkpoint_dir` | Exact checkpoint directory (full path) | auto |
-| `--checkpoint_base_dir` | Base directory for checkpoints | auto |
+| `--logger` | `csv`, `tensorboard`, or `wandb` | csv |
+| `--eval_only` | Test evaluation only (no training) | off |
 | `--fast_dev_run` | Quick sanity check | off |
 
 ### `eval_knn.py` — k-NN Evaluation
 
-Evaluates pretrained feature quality using weighted k-NN classification (no training needed). Follows the standard DINO/DINOv3 protocol.
+Evaluates feature quality using weighted k-NN classification (no training). Follows the DINO/DINOv3 protocol.
 
 ```bash
 python scripts/eval_knn.py \
-    --config configs/DTD/classify.yaml \
-    --pretrained_path output/checkpoints/pretraining/dtd/last.ckpt \
+    --config configs/pancreatic/classify.yaml \
+    --pretrained_path output/checkpoints/pretraining/pancreatic/last.ckpt \
     --k 20 \
     --temperature 0.07 \
     --batch_size 256 \
@@ -300,20 +471,17 @@ python scripts/eval_knn.py \
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--config` | Path to classify YAML config **(required)** | — |
-| `--pretrained_path` | Pretrained SSL checkpoint **(required)** | — |
+| `--pretrained_path` | Pretrained checkpoint **(required)** | — |
 | `--checkpoint_type` | `last` or `best` | last |
-| `--init_mode` | Pretraining mode: `scratch` or `continued` | scratch |
+| `--init_mode` | `scratch` or `continued` | scratch |
 | `--encoder_type` | `teacher` or `student` | teacher |
 | `--k` | Number of nearest neighbors | 20 |
 | `--temperature` | Softmax temperature for voting | 0.07 |
-| `--batch_size` | Batch size for feature extraction | 256 |
+| `--batch_size` | Feature extraction batch size | 256 |
 | `--devices` | GPU device index (single GPU) | 0 |
 | `--concat_cls_patch` | Concatenate CLS + mean patch tokens | off |
-| `--output_dir` | Override output directory | auto |
 | `--output_base_dir` | Base output directory | output |
 | `--seeds` | Evaluation seeds, space-separated | "42" |
-
-**Output:** `output/knn/{dataset}/{pretrain_folder}/knn_results.json`
 
 ### `eval_lowshot.py` — K-Shot Evaluation
 
@@ -321,8 +489,8 @@ Trains a classifier with limited labeled data (k examples per class).
 
 ```bash
 python scripts/eval_lowshot.py \
-    --config configs/DTD/classify.yaml \
-    --pretrained_path output/checkpoints/pretraining/dtd/last.ckpt \
+    --config configs/pancreatic/classify.yaml \
+    --pretrained_path output/checkpoints/pretraining/pancreatic/last.ckpt \
     --k_shot 4 \
     --label_seed 0 \
     --train_seed 42
@@ -331,189 +499,14 @@ python scripts/eval_lowshot.py \
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--config` | Path to classify YAML config **(required)** | — |
-| `--pretrained_path` | Pretrained SSL checkpoint **(required)** | — |
-| `--k_shot` | Number of labeled examples per class **(required)** | — |
+| `--pretrained_path` | Pretrained checkpoint **(required)** | — |
+| `--k_shot` | Labeled examples per class **(required)** | — |
 | `--label_seed` | Seed for label subset selection **(required)** | — |
 | `--train_seed` | Seed for training **(required)** | — |
-| `--checkpoint_type` | `last` or `best` | last |
-| `--encoder_type` | `teacher` or `student` | from config |
 | `--freeze_backbone` | Freeze backbone (linear probing) | off |
 | `--batch_size` | Batch size | from config |
 | `--learning_rate` | Learning rate | from config |
 | `--max_epochs` | Training epochs | from config |
-| `--precision` | Training precision | from config |
-| `--output_dir` | Output directory | output/lowshot |
-| `--method_tag` | Method name for folder structure | — |
-| `--fast_dev_run` | Quick sanity check | off |
-
----
-
-### `run_sweep.sh` — Full Pipeline
-
-Runs the complete pretrain + classify pipeline. Supports training from scratch and continued pretraining from DINOv3.
-
-```bash
-./scripts/run_sweep.sh \
-    --dataset dtd \
-    --gpus 0,1,2,3 \
-    --init-mode scratch \
-    --pretrain-epochs 500 \
-    --pretrain-lr 1e-4 \
-    --classify-epochs 100 \
-    --classify-lr 1e-4 \
-    --classify-mode finetune \
-    --batch-size 128 \
-    --num-prototypes 4096 \
-    --koleo-weight 0.1 \
-    --cls-weight 1.0 \
-    --seeds "0 1 42" \
-    --multi-crop \
-    --compile \
-    --logger tensorboard \
-    --output-dir output
-```
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--dataset` | Dataset name (see [Supported Datasets](#supported-datasets)) **(required)** | — |
-| `--gpus` | GPU indices, comma-separated **(required)** | — |
-| `--init-mode` | `scratch` or `continued` (from DINOv3) | scratch |
-| `--pretrain-epochs` | Pretraining epochs | 300 (scratch) / 100 (continued) |
-| `--pretrain-lr` | Pretraining learning rate | 1e-4 |
-| `--pretrain-seed` | Pretraining seed | 42 |
-| `--classify-epochs` | Classification epochs | 100 |
-| `--classify-lr` | Classification learning rate | 1e-4 |
-| `--classify-mode` | `finetune` or `lineareval` | finetune |
-| `--batch-size` | Batch size | 128 |
-| `--num-prototypes` | Number of prototypes | 4096 |
-| `--koleo-weight` | KoLeo loss weight | 0.1 |
-| `--cls-weight` | CLS loss weight | 1.0 |
-| `--seeds` | Classification seeds (space-separated in quotes) | "0 1 42" |
-| `--multi-crop` | Enable multi-crop augmentation | off |
-| `--compile` | Enable `torch.compile()` for ~15-30% speedup | off |
-| `--no-compile` | Disable `torch.compile()` | — |
-| `--concat-cls-patch` | Concatenate CLS + mean patch tokens | off |
-| `--logger` | Logger type: `csv`, `tensorboard`, `wandb` | csv |
-| `--output-dir` | Output directory | output |
-| `--save-every` | Save checkpoint every N epochs | from config |
-| `--skip-pretrain` | Skip pretraining (use existing checkpoint) | off |
-| `--skip-classify` | Skip classification | off |
-
-### `run_knn.sh` — k-NN Wrapper
-
-Convenience wrapper that auto-finds checkpoints by experiment name. Loops over multiple prototype counts.
-
-```bash
-./scripts/run_knn.sh \
-    --dataset dtd \
-    --gpus 0 \
-    --init-mode scratch \
-    --num-prototypes "256 1024 4096" \
-    --koleo-weight 0.1 \
-    --cls-weight 1.0 \
-    --multi-crop \
-    --k 20 \
-    --temperature 0.07 \
-    --batch-size 256 \
-    --checkpoint-type last \
-    --output-base-dir output \
-    --seeds "0 1 42"
-```
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--dataset` | Dataset name **(required)** | — |
-| `--gpus` | GPU index (single GPU) **(required)** | — |
-| `--init-mode` | `scratch` or `continued` | scratch |
-| `--num-prototypes` | Prototype counts (space-separated in quotes) | "4096" |
-| `--koleo-weight` | KoLeo weight | 0.1 |
-| `--cls-weight` | CLS weight | 1.0 |
-| `--multi-crop` / `--no-multi-crop` | Multi-crop flag | on |
-| `--concat-cls-patch` | Concatenate CLS + patch tokens | off |
-| `--k` | Number of nearest neighbors | 20 |
-| `--temperature` | Softmax temperature | 0.07 |
-| `--batch-size` | Batch size for feature extraction | 256 |
-| `--checkpoint-type` | `last` or `best` | last |
-| `--pretrained-path` | Override checkpoint path (single run) | auto |
-| `--output-base-dir` | Base output directory | output |
-| `--seeds` | Evaluation seeds (space-separated) | "0 1 42" |
-
-**Output:** `output/knn/{dataset}/{pretrain_folder}/knn_results.json`
-
-### `run_ablation.sh` — Ablation Studies
-
-Runs ablation experiments by selectively disabling components.
-
-```bash
-./scripts/run_ablation.sh \
-    --dataset dtd \
-    --gpus 0,1 \
-    --ablations "full no_sinkhorn no_cls_loss no_koleo" \
-    --pretrain-epochs 500 \
-    --classify-epochs 100 \
-    --batch-size 128 \
-    --num-prototypes 1024 \
-    --output-dir ablations
-```
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--dataset` | Dataset name **(required)** | — |
-| `--gpus` | GPU indices **(required)** | — |
-| `--init-mode` | `scratch` or `continued` | scratch |
-| `--ablations` | Ablation names (space-separated in quotes) | "full no_sinkhorn no_cls_loss no_koleo" |
-| `--seeds` | Classification seeds | "0 1 42" |
-| `--pretrain-epochs` | Pretraining epochs | 500 |
-| `--pretrain-lr` | Pretraining learning rate | 1e-4 |
-| `--classify-epochs` | Classification epochs | 100 |
-| `--classify-lr` | Classification learning rate | 1e-4 |
-| `--classify-mode` | `finetune` or `lineareval` | finetune |
-| `--batch-size` | Batch size | 128 |
-| `--num-prototypes` | Number of prototypes | 1024 |
-| `--koleo-weight` | KoLeo loss weight | 0.1 |
-| `--cls-weight` | CLS loss weight | 1.0 |
-| `--output-dir` | Output directory | ablations |
-
-**Ablation options:**
-
-| Ablation | Description |
-|----------|-------------|
-| `full` | All components enabled (baseline) |
-| `no_sinkhorn` | Softmax instead of Sinkhorn-Knopp normalization |
-| `no_cls_loss` | Disable multi-crop CLS distillation loss |
-| `no_koleo` | Disable KoLeo regularization |
-
-### `run_lowshot.sh` — K-Shot Wrapper
-
-Runs few-shot evaluation across multiple methods, datasets, and shot counts.
-
-```bash
-./scripts/run_lowshot.sh \
-    --gpus 0 \
-    --methods "kodiak dinov3" \
-    --datasets "eurosat dtd oxford_pets" \
-    --shots "1 2 4 8 16" \
-    --label-seeds "0 1 42" \
-    --train-seeds "42" \
-    --mode finetune \
-    --init-mode continued
-```
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--gpus` | GPU index **(required)** | — |
-| `--methods` | Methods to evaluate (space-separated) | "kodiak dinov3 mae ijepa moca" |
-| `--datasets` | Datasets to evaluate (space-separated) | "eurosat dtd oxford_pets" |
-| `--shots` | K-shot values (space-separated) | "1 2 4 8 16" |
-| `--label-seeds` | Seeds for label subset selection | "0 1 42" |
-| `--train-seeds` | Seeds for training | "42" |
-| `--mode` | `finetune`, `lineareval`, or both (empty) | both |
-| `--init-mode` | `scratch` or `continued` | continued |
-| `--max-epochs` | Override max epochs | from config |
-| `--batch-size` | Override batch size | from config |
-| `--learning-rate` | Override learning rate | from config |
-| `--output-dir` | Override output directory | auto |
-| `--dry-run` | Print commands without executing | off |
 
 ---
 
@@ -521,55 +514,18 @@ Runs few-shot evaluation across multiple methods, datasets, and shot counts.
 
 All SLURM scripts are in `scripts/slurm/`. They wrap the local scripts and support optional Singularity containers.
 
-**SLURM defaults:** 1 node, 2 GPUs, 22 CPUs, 32GB RAM, 4 days, `gpu` partition.
+**SLURM defaults:** 1 node, 2 GPUs, 22 CPUs, 64GB RAM, 4 days, `gpu` partition.
 
 ### `run_experiment.sh` — Single SLURM Job
 
-Runs one full pretrain + classify experiment as a SLURM job. All parameters are set via environment variables.
-
-```bash
-# From scratch — full pipeline on DTD
-DATASET=dtd NUM_PROTOTYPES=4096 \
-    PRETRAIN_EPOCHS=500 PRETRAIN_LR=0.0001 \
-    CLASSIFY_EPOCHS=100 CLASSIFY_LR=0.0001 \
-    CLASSIFY_MODE=finetune BATCH_SIZE=128 \
-    SEEDS="0 1 42" PRETRAIN_SEED=42 \
-    INIT_MODE=scratch MULTI_CROP=true \
-    KOLEO_WEIGHT=0.1 CLS_WEIGHT=1.0 \
-    LOGGER=tensorboard OUTPUT_DIR=output \
-    sbatch scripts/slurm/run_experiment.sh
-
-# Continued from DINOv3 — fewer pretrain epochs needed
-DATASET=dtd NUM_PROTOTYPES=4096 \
-    PRETRAIN_EPOCHS=100 PRETRAIN_LR=0.0001 \
-    CLASSIFY_EPOCHS=100 CLASSIFY_LR=0.0001 \
-    INIT_MODE=continued MULTI_CROP=true \
-    BATCH_SIZE=128 SEEDS="0 1 42" \
-    LOGGER=tensorboard OUTPUT_DIR=output \
-    sbatch scripts/slurm/run_experiment.sh
-
-# Classification only — skip pretraining, use existing checkpoint
-DATASET=dtd NUM_PROTOTYPES=4096 \
-    SKIP_PRETRAIN=true \
-    PRETRAINED_PATH=/path/to/checkpoint.ckpt \
-    CLASSIFY_EPOCHS=100 CLASSIFY_LR=0.0001 \
-    CLASSIFY_MODE=finetune BATCH_SIZE=128 \
-    SEEDS="0 1 42" LOGGER=tensorboard \
-    sbatch scripts/slurm/run_experiment.sh
-
-# With Singularity container
-DATASET=eurosat NUM_PROTOTYPES=128 \
-    PRETRAIN_EPOCHS=500 BATCH_SIZE=64 \
-    USE_SINGULARITY=true SIF_IMAGE=/path/to/deeplearning.sif \
-    sbatch scripts/slurm/run_experiment.sh
-```
+Runs one full pretrain + classify experiment as a SLURM job. All parameters via environment variables.
 
 | Environment Variable | Description | Default |
 |---------------------|-------------|---------|
 | `NUM_PROTOTYPES` | Number of prototypes **(required)** | — |
 | `DATASET` | Dataset name | dtd |
-| `INIT_MODE` | `scratch` or `continued` (from DINOv3) | scratch |
-| `SEEDS` | Classification seeds (space-separated) | "0 1 42" |
+| `INIT_MODE` | `scratch` or `continued` | scratch |
+| `SEEDS` | Classification seeds | "0 1 42" |
 | `PRETRAIN_SEED` | Pretraining seed | 42 |
 | `PRETRAIN_EPOCHS` | Pretraining epochs | 500 |
 | `PRETRAIN_LR` | Pretraining learning rate | 0.0001 |
@@ -579,94 +535,70 @@ DATASET=eurosat NUM_PROTOTYPES=128 \
 | `BATCH_SIZE` | Batch size | 128 |
 | `KOLEO_WEIGHT` | KoLeo loss weight | 0.1 |
 | `CLS_WEIGHT` | CLS loss weight | 1.0 |
-| `MULTI_CROP` | Enable multi-crop (`true`/`false`) | true |
-| `COMPILE` | Enable `torch.compile()` (`true`/`false`) | false |
-| `LOGGER` | Logger type: `csv`, `tensorboard`, `wandb` | csv |
+| `MULTI_CROP` | Enable multi-crop | true |
+| `COMPILE` | Enable `torch.compile()` | false |
+| `LOGGER` | `csv`, `tensorboard`, `wandb` | csv |
 | `OUTPUT_DIR` | Output directory | output_proto_analysis |
-| `SKIP_PRETRAIN` | Skip pretraining (`true`/`false`) | false |
-| `SKIP_CLASSIFY` | Skip classification (`true`/`false`) | false |
-| `PRETRAINED_PATH` | Path to pretrained checkpoint | — |
+| `SKIP_PRETRAIN` | Skip pretraining | false |
+| `SKIP_CLASSIFY` | Skip classification | false |
+| `PRETRAINED_PATH` | Checkpoint path (for skip-pretrain) | — |
 | `SAVE_EVERY_N_EPOCHS` | Checkpoint every N epochs | — |
-| `USE_SINGULARITY` | Use Singularity container (`true`/`false`) | false |
-| `SIF_IMAGE` | Path to Singularity `.sif` image | `$HOME/deeplearning.sif` |
+| `USE_SINGULARITY` | Use Singularity container | false |
+| `SIF_IMAGE` | Singularity `.sif` image path | `$HOME/deeplearning.sif` |
+
+### `run_knn.sh` — k-NN SLURM Job
+
+Runs k-NN evaluation as a SLURM job (1 GPU, 1 hour).
+
+| Environment Variable | Description | Default |
+|---------------------|-------------|---------|
+| `NUM_PROTOTYPES` | Number of prototypes (or use `PRETRAINED_PATH`) | — |
+| `DATASET` | Dataset name | dtd |
+| `INIT_MODE` | `scratch` or `continued` | scratch |
+| `CHECKPOINT_TYPE` | `last` or `best` | last |
+| `K` | Number of nearest neighbors | 20 |
+| `TEMPERATURE` | Softmax temperature | 0.07 |
+| `BATCH_SIZE` | Feature extraction batch size | 256 |
+| `KOLEO_WEIGHT` | KoLeo weight (for checkpoint path) | 0.1 |
+| `CLS_WEIGHT` | CLS weight (for checkpoint path) | 1.0 |
+| `MULTI_CROP` | Multi-crop flag | true |
+| `OUTPUT_BASE_DIR` | Base output directory | output |
+| `SEEDS` | Evaluation seeds | "0 1 42" |
+| `USE_SINGULARITY` | Use Singularity container | false |
+| `SIF_IMAGE` | Singularity `.sif` image path | `$HOME/deeplearning.sif` |
 
 ### `run_proto_analysis.sh` — Prototype Sweep
 
-Submits multiple SLURM jobs sweeping over prototype counts (128, 256, 512, 1024, 2048, 4096).
+Submits multiple SLURM jobs sweeping prototype counts (128, 256, 512, 1024, 2048, 4096).
 
 ```bash
 bash scripts/slurm/run_proto_analysis.sh
 ```
 
-Edit the script to customize the sweep parameters (dataset, epochs, batch size, etc.).
+### `run_ablation.sh` (SLURM) — Ablation Experiments
 
-### `run_sweep.sh` (SLURM)
-
-SLURM wrapper for a single sweep job with configurable resources.
-
-```bash
-# Full pipeline on EuroSAT from scratch
-DATASET=eurosat \
-    PRETRAIN_EPOCHS=500 PRETRAIN_LR=0.0001 \
-    CLASSIFY_EPOCHS=100 CLASSIFY_LR=0.0001 \
-    CLASSIFY_MODE=finetune BATCH_SIZE=64 \
-    INIT_MODE=scratch MULTI_CROP=true \
-    KOLEO_WEIGHT=0.1 CLS_WEIGHT=1.0 \
-    SEEDS="0 1 42" LOGGER=tensorboard \
-    sbatch scripts/slurm/run_sweep.sh
-
-# Continued from DINOv3 on Oxford Pets
-DATASET=oxford_pets \
-    PRETRAIN_EPOCHS=100 INIT_MODE=continued \
-    CLASSIFY_EPOCHS=100 BATCH_SIZE=128 \
-    MULTI_CROP=true LOGGER=tensorboard \
-    sbatch scripts/slurm/run_sweep.sh
-```
-
-Same environment variables as `run_experiment.sh`.
-
-### `run_ablation.sh` (SLURM)
-
-SLURM wrapper for ablation experiments. Requires `ABLATION` environment variable.
-
-```bash
-# Run a single ablation (no KoLeo regularization)
-ABLATION=no_koleo DATASET=dtd \
-    PRETRAIN_EPOCHS=500 CLASSIFY_EPOCHS=100 \
-    BATCH_SIZE=128 LOGGER=tensorboard \
-    sbatch scripts/slurm/run_ablation.sh
-
-# Run all ablations
-for ABL in full no_sinkhorn no_cls_loss no_koleo; do
-    ABLATION=$ABL DATASET=dtd \
-        PRETRAIN_EPOCHS=500 CLASSIFY_EPOCHS=100 \
-        BATCH_SIZE=128 LOGGER=tensorboard \
-        sbatch scripts/slurm/run_ablation.sh
-done
-```
+See [ABLATIONS.md](ABLATIONS.md) for full ablation documentation.
 
 | Additional Variable | Description | Default |
 |--------------------|-------------|---------|
-| `ABLATION` | Ablation type **(required)**: `full`, `no_sinkhorn`, `no_cls_loss`, `no_koleo` | — |
+| `ABLATION` | **Required.** `full`, `no_sinkhorn`, `no_cls_loss`, `no_koleo` | — |
 
 ---
 
-## Supported Datasets
+## Singularity Container
 
-| Dataset | Config Directory | Type | Classes |
-|---------|-----------------|------|---------|
-| DTD | `configs/DTD/` | HuggingFace | 47 |
-| EuroSAT | `configs/eurosat/` | HuggingFace | 10 |
-| Oxford Pets | `configs/oxford_pets/` | HuggingFace | 37 |
-| CIFAR-100 | `configs/cifar100/` | HuggingFace | 100 |
-| NCTCRCHE100K | `configs/NCTCRCHE100K/` | HuggingFace | 9 |
-| ImageNet-1K | `configs/imagenet1k/` | HuggingFace | 1000 |
-| Pancreatic | `configs/pancreatic/` | Custom (folder) | 7 |
+All SLURM scripts support optional Singularity container execution:
 
-Each dataset directory contains:
-- `pretrain.yaml` — Self-supervised pretraining config
-- `pretrain_continued.yaml` — Continued pretraining from DINOv3
-- `classify.yaml` — Classification config
+```bash
+# Default container at $HOME/deeplearning.sif
+USE_SINGULARITY=true sbatch scripts/slurm/run_experiment.sh
+
+# Custom container path
+USE_SINGULARITY=true SIF_IMAGE=/shared/containers/pytorch.sif \
+    sbatch scripts/slurm/run_experiment.sh
+```
+
+The scripts automatically bind-mount the repo directory, HuggingFace/PyTorch caches, `/tmp`, and shared memory into the container.
 
 ---
 
@@ -681,7 +613,6 @@ model:
   num_prototypes: 4096              # Number of prototype vectors
   projector_dim: 256                # Projection head dimension
   mask_ratio_min_max: [0.1, 0.5]   # Masking ratio range
-  mask_sample_probability: 0.5
 
 optimizer:
   learning_rate: 1.0e-4             # Peak LR (with sqrt_wrt_1024 scaling)
@@ -700,80 +631,14 @@ loss:
   sinkhorn_iters: 3                 # Sinkhorn-Knopp iterations
 
 training:
-  precision: bf16-mixed             # Mixed precision training
+  precision: bf16-mixed
   gradient_clip_val: 3.0
-  strategy: ddp                     # Distributed data parallel
-```
-
----
-
-## Output Structure
-
-All outputs are organized under the output directory (default: `output/`):
-
-```
-output/
-├── logs/
-│   ├── pretraining/{dataset}/{experiment_name}/
-│   │   ├── version_0/              # TensorBoard events or CSV metrics
-│   │   ├── config.yaml             # Saved config snapshot
-│   │   └── training_summary.json   # GPU hours, throughput, timing
-│   └── classification/{dataset}/{pretrain_folder}/
-│       └── finetune_seed_42/
-│           ├── version_0/
-│           ├── config.yaml
-│           ├── training_summary.json
-│           └── test_results.json   # Final test metrics
-├── checkpoints/
-│   ├── pretraining/{dataset}/{experiment_name}/
-│   │   └── last.ckpt
-│   └── classification/{dataset}/{pretrain_folder}/
-│       └── finetune_seed_42/
-│           ├── last.ckpt
-│           └── classifier-epoch=XX-val_loss=X.XXXX.ckpt
-└── knn/{dataset}/{pretrain_folder}/
-    └── knn_results.json
-```
-
-### `training_summary.json`
-
-Automatically saved at the end of each training run with timing information:
-
-```json
-{
-  "total_wall_time_sec": 6150.3,
-  "total_wall_time": "1h 42m 30s",
-  "total_gpu_hours": 3.417,
-  "num_gpus": 2,
-  "num_epochs": 500,
-  "avg_epoch_time_sec": 12.3,
-  "throughput_samples_per_sec": 845.2,
-  "gpu_model": "NVIDIA A100-SXM4-40GB"
-}
-```
-
-### `test_results.json`
-
-Saved after classification with all evaluation metrics:
-
-```json
-{
-  "dataset": "dtd",
-  "mode": "finetune",
-  "seed": 42,
-  "test_acc": 0.7523,
-  "test_f1_macro": 0.7412,
-  "test_auroc": 0.9801,
-  "test_precision_macro": 0.7534,
-  "test_recall_macro": 0.7412
-}
+  strategy: ddp
 ```
 
 ---
 
 ## Logging
-
-KODIAK supports three logger backends, selected with `--logger`:
 
 | Logger | Flag | Viewer |
 |--------|------|--------|
@@ -784,37 +649,14 @@ KODIAK supports three logger backends, selected with `--logger`:
 ### TensorBoard
 
 ```bash
-# Start TensorBoard (on a remote server, add --bind_all)
 tensorboard --logdir output/logs --bind_all
-
-# If behind a proxy, bypass it for localhost
-no_proxy=127.0.0.0/8,localhost tensorboard --logdir output/logs --bind_all
 ```
 
-Then SSH tunnel from your local machine and open `http://localhost:6006`:
+Then SSH tunnel and open `http://localhost:6006`:
 
 ```bash
 ssh -L 6006:localhost:6006 user@server
 ```
-
-### Logged Metrics
-
-**Pretraining** (per step and per epoch):
-- `train_loss` — total loss
-- `train_mask` — masked image modeling loss
-- `train_koleo` — KoLeo diversity loss
-- `train_proto_cls` — prototype classification loss
-- `train_cls_global` / `train_cls_local` — global/local CLS losses
-- `train_util` — prototype utilization (unique prototypes used)
-- `lr`, `last_layer_lr` — learning rates
-- `wd`, `mom`, `teacher_temp` — schedule values
-- `epoch_time_sec`, `gpu_hours` — timing
-
-**Classification** (per step/epoch):
-- `train_loss`, `train_acc`, `train_acc_top5`
-- `val_loss`, `val_acc`, `val_acc_top5`
-- `test_acc`, `test_f1_macro`, `test_auroc`, etc.
-- `epoch_time_sec`, `gpu_hours`
 
 ---
 
@@ -854,10 +696,10 @@ KODIAK/
 │   ├── run_knn.sh               # k-NN evaluation wrapper
 │   ├── run_ablation.sh          # Ablation experiments
 │   ├── run_lowshot.sh           # K-shot evaluation wrapper
-│   ├── submit_ablations.sh      # Submit all ablation SLURM jobs
 │   ├── aggregate_lowshot.py     # Aggregate lowshot results into tables
 │   └── slurm/                   # SLURM job scripts
 │       ├── run_experiment.sh    # Single experiment (env var config)
+│       ├── run_knn.sh           # k-NN evaluation SLURM job
 │       ├── run_proto_analysis.sh # Prototype count sweep
 │       ├── run_sweep.sh         # SLURM sweep wrapper
 │       └── run_ablation.sh      # SLURM ablation wrapper
@@ -870,6 +712,8 @@ KODIAK/
 │   ├── imagenet1k/
 │   └── pancreatic/
 ├── dinov3/                      # DINOv3 library (backbone, utilities)
+├── DATASETS.md                  # Dataset documentation and per-dataset examples
+├── ABLATIONS.md                 # Ablation study documentation
 └── requirements.txt
 ```
 
