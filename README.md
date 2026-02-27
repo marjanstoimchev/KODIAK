@@ -267,49 +267,137 @@ done
 
 All scripts have non-SLURM equivalents. Use these on a machine with GPUs directly.
 
-### Full Pipeline
+### 1. Full Pipeline: Pretrain + Classify
+
+#### From Scratch (500 pretrain epochs + 100 classify epochs)
+
+**Fine-tuning:**
 
 ```bash
-# From scratch: pretrain + fine-tune
+# Pancreatic — fine-tuning after scratch pretraining
 ./scripts/run_sweep.sh --dataset pancreatic --gpus 0,1 \
-    --init-mode scratch --pretrain-epochs 500 --classify-epochs 100 \
-    --classify-lr 1e-4 --classify-mode finetune \
-    --batch-size 64 --num-prototypes 128 --seeds "0 1 42"
-
-# Continued: pretrain + linear eval
-./scripts/run_sweep.sh --dataset pancreatic --gpus 0,1 \
-    --init-mode continued --pretrain-epochs 100 --classify-epochs 50 \
-    --classify-lr 1e-3 --classify-mode lineareval \
+    --init-mode scratch --pretrain-epochs 500 \
+    --classify-epochs 100 --classify-lr 1e-4 --classify-mode finetune \
     --batch-size 64 --num-prototypes 128 --seeds "0 1 42"
 ```
 
-### Classification Only
+**Linear evaluation:**
 
 ```bash
-# Fine-tuning from scratch checkpoint (LR 1e-4, 100 epochs)
-./scripts/run_sweep.sh --dataset pancreatic --gpus 0,1 \
-    --skip-pretrain --classify-epochs 100 --classify-lr 1e-4 \
-    --classify-mode finetune --batch-size 64 --num-prototypes 128 --seeds "0 1 42"
-
-# Linear eval from scratch checkpoint (LR 1e-3, 50 epochs)
-./scripts/run_sweep.sh --dataset pancreatic --gpus 0,1 \
-    --skip-pretrain --classify-epochs 50 --classify-lr 1e-3 \
-    --classify-mode lineareval --batch-size 64 --num-prototypes 128 --seeds "0 1 42"
+# CIFAR-100 — linear eval after scratch pretraining
+./scripts/run_sweep.sh --dataset cifar100 --gpus 0,1 \
+    --init-mode scratch --pretrain-epochs 500 \
+    --classify-epochs 50 --classify-lr 1e-3 --classify-mode lineareval \
+    --batch-size 128 --num-prototypes 128 --seeds "0 1 42"
 ```
 
-### k-NN Evaluation
+#### Continued Pretraining (100 pretrain epochs + 50 classify epochs)
+
+**Fine-tuning:**
 
 ```bash
-# From scratch checkpoint
+# Pancreatic — fine-tuning after continued pretraining
+./scripts/run_sweep.sh --dataset pancreatic --gpus 0,1 \
+    --init-mode continued --pretrain-epochs 100 \
+    --classify-epochs 50 --classify-lr 1e-4 --classify-mode finetune \
+    --batch-size 64 --num-prototypes 128 --seeds "0 1 42"
+```
+
+**Linear evaluation:**
+
+```bash
+# DTD — linear eval after continued pretraining
+./scripts/run_sweep.sh --dataset dtd --gpus 0,1 \
+    --init-mode continued --pretrain-epochs 100 \
+    --classify-epochs 50 --classify-lr 1e-3 --classify-mode lineareval \
+    --batch-size 128 --num-prototypes 128 --seeds "0 1 42"
+```
+
+---
+
+### 2. Pretraining Only
+
+```bash
+# From scratch — 500 epochs
+./scripts/run_sweep.sh --dataset pancreatic --gpus 0,1 \
+    --init-mode scratch --pretrain-epochs 500 \
+    --skip-classify --batch-size 64 --num-prototypes 128
+
+# Continued from DINOv3 weights — 100 epochs
+./scripts/run_sweep.sh --dataset pancreatic --gpus 0,1 \
+    --init-mode continued --pretrain-epochs 100 \
+    --skip-classify --batch-size 64 --num-prototypes 128
+```
+
+---
+
+### 3. Classification Only (Skip Pretraining)
+
+Requires an existing pretrained checkpoint.
+
+**Fine-tuning (from scratch checkpoint):**
+
+```bash
+./scripts/run_sweep.sh --dataset pancreatic --gpus 0,1 \
+    --init-mode scratch --skip-pretrain \
+    --classify-mode finetune --classify-lr 1e-4 --classify-epochs 100 \
+    --batch-size 64 --num-prototypes 128 --seeds "0 1 42"
+```
+
+**Linear evaluation (from scratch checkpoint):**
+
+```bash
+./scripts/run_sweep.sh --dataset pancreatic --gpus 0,1 \
+    --init-mode scratch --skip-pretrain \
+    --classify-mode lineareval --classify-lr 1e-3 --classify-epochs 50 \
+    --batch-size 64 --num-prototypes 128 --seeds "0 1 42"
+```
+
+**From continued checkpoint:**
+
+```bash
+# Fine-tuning from continued checkpoint
+./scripts/run_sweep.sh --dataset pancreatic --gpus 0,1 \
+    --init-mode continued --skip-pretrain \
+    --classify-mode finetune --classify-lr 1e-4 --classify-epochs 50 \
+    --batch-size 64 --num-prototypes 128 --seeds "0 1 42"
+
+# Linear eval from continued checkpoint
+./scripts/run_sweep.sh --dataset pancreatic --gpus 0,1 \
+    --init-mode continued --skip-pretrain \
+    --classify-mode lineareval --classify-lr 1e-3 --classify-epochs 50 \
+    --batch-size 64 --num-prototypes 128 --seeds "0 1 42"
+```
+
+---
+
+### 4. k-NN Evaluation
+
+```bash
+# k-NN from scratch checkpoint
 ./scripts/run_knn.sh --dataset pancreatic --gpus 0 \
     --init-mode scratch --num-prototypes 128
 
-# From continued checkpoint
+# k-NN from continued checkpoint
 ./scripts/run_knn.sh --dataset pancreatic --gpus 0 \
     --init-mode continued --num-prototypes 128
 ```
 
-### Few-Shot Evaluation
+---
+
+### 5. Ablation Studies
+
+```bash
+# Run all ablations on Pancreatic
+./scripts/run_ablation.sh --dataset pancreatic --gpus 0,1 \
+    --ablations "full no_sinkhorn no_cls_loss no_koleo" \
+    --pretrain-epochs 500 --classify-epochs 100 \
+    --batch-size 64 --num-prototypes 1024 --output-dir ablations
+```
+
+---
+
+### 6. Few-Shot Evaluation
 
 ```bash
 # Fine-tuning — pancreatic, continued, LR 1e-4
