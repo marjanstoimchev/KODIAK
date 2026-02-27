@@ -346,12 +346,22 @@ def main():
     lowshot_train = Subset(full_train, selected_idx)
     datamodule.train_dataset = lowshot_train
 
-    # Auto-clamp batch size so we get at least 1 batch
+    # Dynamic batch sizing: ensure enough gradient steps per epoch.
+    # With tiny datasets (e.g., k=1, 7 samples), using BS=7 gives only
+    # 1 step/epoch. Instead, shrink BS to get at least MIN_STEPS_PER_EPOCH
+    # steps, giving the model more frequent gradient updates.
+    MIN_STEPS_PER_EPOCH = 10
     effective_bs = min(per_gpu_bs, n_sub)
     effective_bs = max(effective_bs, 1)
+
+    # Shrink batch size to hit the minimum steps target
+    if n_sub > 0 and (n_sub // effective_bs) < MIN_STEPS_PER_EPOCH:
+        effective_bs = max(1, n_sub // MIN_STEPS_PER_EPOCH)
+
+    steps_per_epoch_est = max(1, n_sub // effective_bs)
     if effective_bs != per_gpu_bs:
-        print(f"  Clamped per-GPU batch size: {per_gpu_bs} -> {effective_bs} "
-              f"(subset too small for original BS)")
+        print(f"  Dynamic batch size: {per_gpu_bs} -> {effective_bs} "
+              f"({steps_per_epoch_est} steps/epoch from {n_sub} samples)")
 
     # Patch train_dataloader to use the subset
     _original_train_dl = datamodule.train_dataloader

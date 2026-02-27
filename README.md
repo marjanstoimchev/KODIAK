@@ -243,7 +243,102 @@ sbatch scripts/slurm/run_knn.sh
 
 ---
 
-### 5. Ablation Studies
+### 5. Few-Shot (Low-Shot) Evaluation
+
+Evaluates SSL representations with limited labelled data (k examples per class). Runs 3 label seeds x 1 training seed = 3 runs per setting by default. Batch size is dynamically adjusted for very low-shot settings (k=1,2) to ensure enough gradient updates.
+
+#### Fine-Tuning + Linear Eval on CIFAR-100 (continued)
+
+**Fine-tuning (LR 1e-4):**
+
+```bash
+USE_SINGULARITY=true \
+INIT_MODE=continued \
+DATASETS=cifar100 \
+SHOTS="1 2 4 8 16" \
+MODE=finetune \
+LEARNING_RATE=1e-4 \
+MAX_EPOCHS=50 \
+BATCH_SIZE=128 \
+sbatch scripts/slurm/run_lowshot.sh
+```
+
+**Linear evaluation (LR 1e-3):**
+
+```bash
+USE_SINGULARITY=true \
+INIT_MODE=continued \
+DATASETS=cifar100 \
+SHOTS="1 2 4 8 16" \
+MODE=lineareval \
+LEARNING_RATE=1e-3 \
+MAX_EPOCHS=50 \
+BATCH_SIZE=128 \
+sbatch scripts/slurm/run_lowshot.sh
+```
+
+#### Pancreatic (continued)
+
+```bash
+# Fine-tuning
+USE_SINGULARITY=true \
+INIT_MODE=continued \
+DATASETS=pancreatic \
+SHOTS="1 2 4 8 16" \
+MODE=finetune \
+LEARNING_RATE=1e-4 \
+MAX_EPOCHS=50 \
+BATCH_SIZE=64 \
+sbatch scripts/slurm/run_lowshot.sh
+
+# Linear eval
+USE_SINGULARITY=true \
+INIT_MODE=continued \
+DATASETS=pancreatic \
+SHOTS="1 2 4 8 16" \
+MODE=lineareval \
+LEARNING_RATE=1e-3 \
+MAX_EPOCHS=50 \
+BATCH_SIZE=64 \
+sbatch scripts/slurm/run_lowshot.sh
+```
+
+#### From Scratch Checkpoints
+
+```bash
+# Fine-tuning on multiple datasets
+USE_SINGULARITY=true \
+INIT_MODE=scratch \
+DATASETS="cifar100 dtd" \
+SHOTS="1 2 4 8 16" \
+MODE=finetune \
+LEARNING_RATE=1e-4 \
+MAX_EPOCHS=50 \
+BATCH_SIZE=128 \
+sbatch scripts/slurm/run_lowshot.sh
+```
+
+#### Few-Shot SLURM Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `INIT_MODE` | continued | `scratch` or `continued` |
+| `METHODS` | kodiak | Methods to evaluate (space-separated) |
+| `DATASETS` | "cifar100 dtd" | Datasets to evaluate (space-separated) |
+| `SHOTS` | "1 2 4 8 16" | K-shot values (space-separated) |
+| `LABEL_SEEDS` | "0 1 42" | Label subset seeds |
+| `TRAIN_SEEDS` | "42" | Training seeds |
+| `MODE` | both | `finetune`, `lineareval`, or both |
+| `MAX_EPOCHS` | 100 | Max training epochs |
+| `BATCH_SIZE` | from config | Batch size |
+| `LEARNING_RATE` | from config | Learning rate |
+| `OUTPUT_DIR` | auto | Override output directory |
+| `USE_SINGULARITY` | false | Use Singularity container |
+| `SIF_IMAGE` | `$HOME/deeplearning.sif` | Container image path |
+
+---
+
+### 6. Ablation Studies
 
 See [ABLATIONS.md](ABLATIONS.md) for full ablation documentation.
 
@@ -385,7 +480,48 @@ Requires an existing pretrained checkpoint.
 
 ---
 
-### 5. Ablation Studies
+### 5. Few-Shot (Low-Shot) Evaluation
+
+#### CIFAR-100 (continued)
+
+```bash
+# Fine-tuning (LR 1e-4, 50 epochs)
+./scripts/run_lowshot.sh --gpus 0 --methods kodiak --datasets cifar100 \
+    --shots "1 2 4 8 16" --mode finetune --init-mode continued \
+    --learning-rate 1e-4 --max-epochs 50 --batch-size 128
+
+# Linear eval (LR 1e-3, 50 epochs)
+./scripts/run_lowshot.sh --gpus 0 --methods kodiak --datasets cifar100 \
+    --shots "1 2 4 8 16" --mode lineareval --init-mode continued \
+    --learning-rate 1e-3 --max-epochs 50 --batch-size 128
+```
+
+#### Pancreatic (continued)
+
+```bash
+# Fine-tuning
+./scripts/run_lowshot.sh --gpus 0 --methods kodiak --datasets pancreatic \
+    --shots "1 2 4 8 16" --mode finetune --init-mode continued \
+    --learning-rate 1e-4 --max-epochs 50 --batch-size 64
+
+# Linear eval
+./scripts/run_lowshot.sh --gpus 0 --methods kodiak --datasets pancreatic \
+    --shots "1 2 4 8 16" --mode lineareval --init-mode continued \
+    --learning-rate 1e-3 --max-epochs 50 --batch-size 64
+```
+
+#### From Scratch Checkpoints
+
+```bash
+# Fine-tuning on multiple datasets
+./scripts/run_lowshot.sh --gpus 0 --methods kodiak --datasets "cifar100 dtd" \
+    --shots "1 2 4 8 16" --mode finetune --init-mode scratch \
+    --learning-rate 1e-4 --max-epochs 50 --batch-size 128
+```
+
+---
+
+### 6. Ablation Studies
 
 ```bash
 # Run all ablations on Pancreatic
@@ -393,22 +529,6 @@ Requires an existing pretrained checkpoint.
     --ablations "full no_sinkhorn no_cls_loss no_koleo" \
     --pretrain-epochs 500 --classify-epochs 100 \
     --batch-size 64 --num-prototypes 1024 --output-dir ablations
-```
-
----
-
-### 6. Few-Shot Evaluation
-
-```bash
-# Fine-tuning — pancreatic, continued, LR 1e-4
-./scripts/run_lowshot.sh --gpus 0 --methods "kodiak" --datasets pancreatic \
-    --shots "2 4 8 16" --mode finetune --init-mode continued \
-    --learning-rate 1e-4 --max-epochs 50 --batch-size 64
-
-# Linear eval — pancreatic, continued, LR 1e-3
-./scripts/run_lowshot.sh --gpus 0 --methods "kodiak" --datasets pancreatic \
-    --shots "2 4 8 16" --mode lineareval --init-mode continued \
-    --learning-rate 1e-3 --max-epochs 50 --batch-size 64
 ```
 
 ---
@@ -663,6 +783,26 @@ Submits multiple SLURM jobs sweeping prototype counts (128, 256, 512, 1024, 2048
 bash scripts/slurm/run_proto_analysis.sh
 ```
 
+### `run_lowshot.sh` — Few-Shot SLURM Job
+
+Runs k-shot evaluation sweep as a SLURM job (1 GPU, 3 days).
+
+| Environment Variable | Description | Default |
+|---------------------|-------------|---------|
+| `INIT_MODE` | `scratch` or `continued` | continued |
+| `METHODS` | Methods to evaluate (space-separated) | kodiak |
+| `DATASETS` | Datasets to evaluate (space-separated) | "cifar100 dtd" |
+| `SHOTS` | K-shot values (space-separated) | "1 2 4 8 16" |
+| `LABEL_SEEDS` | Label subset seeds | "0 1 42" |
+| `TRAIN_SEEDS` | Training seeds | "42" |
+| `MODE` | `finetune`, `lineareval`, or both | both |
+| `MAX_EPOCHS` | Max training epochs | 100 |
+| `BATCH_SIZE` | Batch size | from config |
+| `LEARNING_RATE` | Learning rate | from config |
+| `OUTPUT_DIR` | Override output directory | auto |
+| `USE_SINGULARITY` | Use Singularity container | false |
+| `SIF_IMAGE` | Singularity `.sif` image path | `$HOME/deeplearning.sif` |
+
 ### `run_ablation.sh` (SLURM) — Ablation Experiments
 
 See [ABLATIONS.md](ABLATIONS.md) for full ablation documentation.
@@ -788,6 +928,7 @@ KODIAK/
 │   └── slurm/                   # SLURM job scripts
 │       ├── run_experiment.sh    # Single experiment (env var config)
 │       ├── run_knn.sh           # k-NN evaluation SLURM job
+│       ├── run_lowshot.sh       # Few-shot evaluation SLURM job
 │       ├── run_proto_analysis.sh # Prototype count sweep
 │       ├── run_sweep.sh         # SLURM sweep wrapper
 │       └── run_ablation.sh      # SLURM ablation wrapper
