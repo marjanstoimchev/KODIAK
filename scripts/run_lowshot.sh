@@ -279,9 +279,11 @@ for method in $METHODS; do
                         RUN_IDX=$((RUN_IDX + 1))
 
                         # Build output dir
-                        out_base="${OUTPUT_DIR:-output/lowshot}"
+                        # Structure: {ckpt_base}/lowshot_from_{init_mode}/{dataset}/proto{N}_koleo0.1_cls1/{run_tag}
+                        # Matches existing folder convention (knn_from_continued, checkpoints, etc.)
+                        out_base="${OUTPUT_DIR:-${CKPT_BASE_DIR}/lowshot_from_${INIT_MODE}}"
                         run_tag="${eval_mode}_${k}shot_ls${ls}_ts${ts}"
-                        run_dir="${out_base}/${dataset}/${method}/${run_tag}"
+                        run_dir="${out_base}/${dataset}/proto${PROTOTYPES}_koleo0.1_cls1/${run_tag}"
 
                         # Skip if results already exist
                         if [[ -f "${run_dir}/test_results.json" ]]; then
@@ -293,6 +295,9 @@ for method in $METHODS; do
                         echo "[$RUN_IDX/$TOTAL] RUN   $method/$dataset  ${eval_mode}  ${k}-shot  ls=$ls  ts=$ts"
 
                         # Build command (single GPU via CUDA_VISIBLE_DEVICES)
+                        # method_tag controls the subfolder under dataset/
+                        # e.g. proto128_koleo0.1_cls1 → matches knn & checkpoint naming
+                        method_subtag="proto${PROTOTYPES}_koleo0.1_cls1"
                         CMD=(
                             python scripts/eval_lowshot.py
                             --config "$config"
@@ -300,7 +305,7 @@ for method in $METHODS; do
                             --k_shot "$k"
                             --label_seed "$ls"
                             --train_seed "$ts"
-                            --method_tag "$method"
+                            --method_tag "$method_subtag"
                             --output_dir "$out_base"
                         )
 
@@ -348,6 +353,6 @@ echo "  Ran:      $((TOTAL - SKIPPED - FAILED))"
 echo "  Skipped:  $SKIPPED"
 echo "  Failed:   $FAILED"
 echo ""
-echo "Results in: ${OUTPUT_DIR:-output/lowshot}/"
-echo "  Aggregate with:  python scripts/aggregate_lowshot.py --input_dir ${OUTPUT_DIR:-output/lowshot}"
+echo "Results in: ${OUTPUT_DIR:-${CKPT_BASE_DIR}/lowshot_from_${INIT_MODE}}/"
+echo "  Aggregate with:  python scripts/aggregate_lowshot.py --input_dir ${OUTPUT_DIR:-${CKPT_BASE_DIR}/lowshot_from_${INIT_MODE}}"
 separator
