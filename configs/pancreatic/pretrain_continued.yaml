@@ -22,8 +22,7 @@ experiment:
 data:
   name: "pancreatic"
   dataset_type: "pancreatic"
-  root_dir: "/home/marjans/Datasets/pancreatic/SLIDE-3210"
-
+  root_dir: "/d/hpc/home/ms3733/Datasets/pancreatic/"
   batch_size: 64
   num_workers: 22
   pin_memory: true

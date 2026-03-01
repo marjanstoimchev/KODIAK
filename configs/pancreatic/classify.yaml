@@ -14,11 +14,11 @@ experiment:
 data:
   name: "pancreatic"
   dataset_type: "pancreatic"
-  root_dir: "/home/marjans/Datasets/pancreatic/SLIDE-3210"
+  root_dir: "/d/hpc/home/ms3733/Datasets/pancreatic/"
   batch_size: 48
   num_workers: 22
   image_size: 256
-  num_classes: 7
+  num_classes: 12
   val_split: 0.1
   test_split: 0.2
 
