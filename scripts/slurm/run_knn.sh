@@ -83,6 +83,7 @@ BATCH_SIZE="${BATCH_SIZE:-256}"
 KOLEO_WEIGHT="${KOLEO_WEIGHT:-0.1}"
 CLS_WEIGHT="${CLS_WEIGHT:-1.0}"
 MULTI_CROP="${MULTI_CROP:-true}"
+LOCAL_CROPS_NUMBER="${LOCAL_CROPS_NUMBER:-8}"
 CONCAT_CLS_PATCH="${CONCAT_CLS_PATCH:-false}"
 OUTPUT_BASE_DIR="${OUTPUT_BASE_DIR:-output}"
 SEEDS="${SEEDS:-0 1 42}"
@@ -159,7 +160,7 @@ if [[ -n "$PRETRAINED_PATH" ]]; then
 fi
 
 if [[ "$MULTI_CROP" == "true" ]]; then
-    KNN_ARGS+=(--multi-crop)
+    KNN_ARGS+=(--multi-crop --local-crops-number "$LOCAL_CROPS_NUMBER")
 else
     KNN_ARGS+=(--no-multi-crop)
 fi

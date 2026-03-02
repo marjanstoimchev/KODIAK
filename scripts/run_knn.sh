@@ -48,6 +48,7 @@ usage() {
     echo "  --cls-weight W               CLS weight (default: 1.0)"
     echo "  --multi-crop                 Multi-crop flag (default: on)"
     echo "  --no-multi-crop              Disable multi-crop flag"
+    echo "  --local-crops-number N       Number of local crops for mc suffix (default: 8)"
     echo "  --concat-cls-patch           Concatenate CLS + mean patch tokens for k-NN features (2x embed_dim)"
     echo "  --output-base-dir DIR        Base output directory (default: output)"
     echo "  --seeds \"S1 S2 ..\"           Evaluation seeds (default: \"0 1 42\")"
@@ -83,6 +84,7 @@ NUM_PROTOTYPES="4096"
 KOLEO_WEIGHT="0.1"
 CLS_WEIGHT="1.0"
 MULTI_CROP=true
+LOCAL_CROPS_NUMBER="8"
 CONCAT_CLS_PATCH=false
 OUTPUT_BASE_DIR="output"
 SEEDS="0 1 42"
@@ -102,6 +104,7 @@ while [[ $# -gt 0 ]]; do
         --cls-weight)      CLS_WEIGHT="$2";        shift 2 ;;
         --multi-crop)      MULTI_CROP=true;        shift ;;
         --no-multi-crop)   MULTI_CROP=false;       shift ;;
+        --local-crops-number) LOCAL_CROPS_NUMBER="$2"; shift 2 ;;
         --concat-cls-patch) CONCAT_CLS_PATCH=true; shift ;;
         --output-base-dir) OUTPUT_BASE_DIR="$2";   shift 2 ;;
         --seeds)           SEEDS="$2";             shift 2 ;;
@@ -164,7 +167,7 @@ fi
 
 MC_SUFFIX=""
 if [[ "$MULTI_CROP" == true ]]; then
-    MC_SUFFIX="_mc"
+    MC_SUFFIX="_mc${LOCAL_CROPS_NUMBER}"
 fi
 
 # -----------------------------------------------------------------------------

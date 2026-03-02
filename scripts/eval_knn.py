@@ -104,6 +104,10 @@ def extract_pretraining_info(checkpoint_path: str) -> Dict[str, Any]:
             "prototype_cls_loss_weight", hparams.get("cls_loss_weight", None)
         )
         info["multi_crop"] = hparams.get("multi_crop", False)
+        info["n_local_crops"] = hparams.get("n_local_crops", 0)
+        # Infer multi_crop from n_local_crops if not explicitly saved
+        if not info["multi_crop"] and info["n_local_crops"] and info["n_local_crops"] > 0:
+            info["multi_crop"] = True
         if not info["num_prototypes"]:
             model_cfg = hparams.get("model", {})
             if isinstance(model_cfg, dict):
@@ -126,7 +130,8 @@ def build_pretrain_folder_name(info: Dict[str, Any]) -> str:
     if cls_w is not None:
         parts.append(f"cls{cls_w:.4g}" if isinstance(cls_w, float) else f"cls{cls_w}")
     if info.get("multi_crop", False):
-        parts.append("mc")
+        n_local = info.get("n_local_crops", 0)
+        parts.append(f"mc{n_local}" if n_local else "mc")
     return "_".join(parts) if parts else "unknown_pretraining"
 
 
@@ -249,6 +254,7 @@ def create_datamodule(cfg, batch_size, seed):
         sampler_type=SamplerType.EPOCH,
         seed=seed,
         csv_path=cfg.data.get("csv_path", None),
+        root_dir=cfg.data.get("root_dir", None),
         magnification=cfg.data.get("magnification", None),
         root_path=cfg.data.get("root_path", None),
         hf_dataset_name=cfg.data.get("hf_dataset_name", None),
