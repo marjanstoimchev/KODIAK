@@ -83,6 +83,7 @@ LEARNING_RATE="${LEARNING_RATE:-}"
 OUTPUT_DIR="${OUTPUT_DIR:-}"
 CKPT_BASE_DIR="${CKPT_BASE_DIR:-output_proto_analysis}"
 PROTOTYPES="${PROTOTYPES:-128}"
+LOCAL_CROPS_NUMBER="${LOCAL_CROPS_NUMBER:-8}"
 
 # Singularity container setup (optional)
 SIF_IMAGE="${SIF_IMAGE:-$HOME/deeplearning.sif}"
@@ -144,7 +145,7 @@ export SLURM_JOB_NAME="bash"
 # =============================================================================
 # Build command
 # =============================================================================
-CMD="./scripts/run_lowshot.sh --gpus 0 --init-mode $INIT_MODE --methods '$METHODS' --datasets '$DATASETS' --shots '$SHOTS' --label-seeds '$LABEL_SEEDS' --train-seeds '$TRAIN_SEEDS' --ckpt-base-dir $CKPT_BASE_DIR --prototypes $PROTOTYPES"
+CMD="./scripts/run_lowshot.sh --gpus 0 --init-mode $INIT_MODE --methods '$METHODS' --datasets '$DATASETS' --shots '$SHOTS' --label-seeds '$LABEL_SEEDS' --train-seeds '$TRAIN_SEEDS' --ckpt-base-dir $CKPT_BASE_DIR --prototypes $PROTOTYPES --local-crops-number $LOCAL_CROPS_NUMBER"
 [ -n "$MODE" ] && CMD="$CMD --mode $MODE"
 [ -n "$MAX_EPOCHS" ] && CMD="$CMD --max-epochs $MAX_EPOCHS"
 [ -n "$BATCH_SIZE" ] && CMD="$CMD --batch-size $BATCH_SIZE"

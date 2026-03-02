@@ -42,6 +42,7 @@ LEARNING_RATE=""
 OUTPUT_DIR=""
 CKPT_BASE_DIR="output_proto_analysis"  # base dir for kodiak checkpoints
 PROTOTYPES="128"                        # number of prototypes (e.g. 64, 128, 256, 512, 1024, 2048, 4096)
+LOCAL_CROPS_NUMBER="8"                  # number of local crops for mc suffix
 DRY_RUN=false
 
 # ─────────────────────────────────────────────────────────────────────
@@ -68,6 +69,7 @@ Optional:
   --output-dir DIR        Override output directory
   --ckpt-base-dir DIR     Base dir for kodiak checkpoints (default: $CKPT_BASE_DIR)
   --prototypes N          Number of prototypes (default: $PROTOTYPES)
+  --local-crops-number N  Number of local crops for mc suffix (default: $LOCAL_CROPS_NUMBER)
   --dry-run               Print commands without executing
   --help                  Show this help
 
@@ -106,6 +108,7 @@ while [[ $# -gt 0 ]]; do
         --output-dir)     OUTPUT_DIR="$2";    shift 2 ;;
         --ckpt-base-dir)  CKPT_BASE_DIR="$2"; shift 2 ;;
         --prototypes)     PROTOTYPES="$2";    shift 2 ;;
+        --local-crops-number) LOCAL_CROPS_NUMBER="$2"; shift 2 ;;
         --dry-run)        DRY_RUN=true;       shift   ;;
         --help|-h)        usage ;;
         *)                echo "Unknown option: $1"; usage ;;
@@ -147,9 +150,9 @@ find_ssl_checkpoint() {
     case "$method" in
         kodiak)
             if [[ "$INIT_MODE" == "continued" ]]; then
-                ckpt="${CKPT_BASE_DIR}/checkpoints/pretraining/${dataset}/kodiak_${dataset}_continued_proto${PROTOTYPES}_koleo0.1_cls1.0_mc/last.ckpt"
+                ckpt="${CKPT_BASE_DIR}/checkpoints/pretraining/${dataset}/kodiak_${dataset}_continued_proto${PROTOTYPES}_koleo0.1_cls1.0_mc${LOCAL_CROPS_NUMBER}/last.ckpt"
             else
-                ckpt="${CKPT_BASE_DIR}/checkpoints/pretraining/${dataset}/kodiak_${dataset}_proto${PROTOTYPES}_koleo0.1_cls1.0_mc/last.ckpt"
+                ckpt="${CKPT_BASE_DIR}/checkpoints/pretraining/${dataset}/kodiak_${dataset}_proto${PROTOTYPES}_koleo0.1_cls1.0_mc${LOCAL_CROPS_NUMBER}/last.ckpt"
             fi
             ;;
         dinov3)
