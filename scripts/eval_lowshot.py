@@ -312,6 +312,7 @@ def main():
         sampler_type=SamplerType.DISTRIBUTED,
         seed=cfg.experiment.seed,
         csv_path=cfg.data.get("csv_path", None),
+        root_dir=cfg.data.get("root_dir", None),
         magnification=cfg.data.get("magnification", None),
         root_path=cfg.data.get("root_path", None),
         hf_dataset_name=cfg.data.get("hf_dataset_name", None),
