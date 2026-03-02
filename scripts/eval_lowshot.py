@@ -61,7 +61,6 @@ from src.data.classification.datamodule import (
 )
 from src.data.classification.collate import classification_collate
 from src.data.utils import SamplerType, make_sampler
-from src.callbacks import MPPProgressBar
 from src.utils.config import load_config, override_config
 
 # Re-use checkpoint helpers from train_classifier (same scripts/ directory)
@@ -400,7 +399,6 @@ def main():
             mode="min",
             verbose=True,
         ),
-        MPPProgressBar(mode="classification", refresh_rate=1, leave=True),
     ]
 
     # ── 9. Logger ─────────────────────────────────────────────────────
@@ -419,6 +417,7 @@ def main():
         logger=logger,
         callbacks=callbacks,
         enable_checkpointing=False,
+        enable_progress_bar=False,
         check_val_every_n_epoch=val_interval,
         log_every_n_steps=max(1, steps_per_epoch),
         fast_dev_run=args.fast_dev_run,
