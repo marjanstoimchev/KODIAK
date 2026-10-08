@@ -1,0 +1,23 @@
+# Tooling configuration. The code is run from the repository root (scripts/*.py
+# add the root to sys.path), so no build/packaging section is needed.
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "integration: end-to-end CLI tests that run the scripts in a subprocess (slower)",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::UserWarning",
+    "ignore::FutureWarning",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+extend-exclude = ["dinov3", "dinov3_weights"]
+
+[tool.ruff.lint]
+# Correctness-only rule set: syntax errors, undefined names, unused imports/variables.
+select = ["E9", "F"]
