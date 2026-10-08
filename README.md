@@ -28,6 +28,11 @@ supposed to adapt the model. In practice it often does the opposite: the continu
 self-distillation are weakly constrained, so the teacher *drifts*, the geometric structure of the pretrained
 representation is distorted, and downstream accuracy drops below the un-adapted foundation model.
 
+<p align="center">
+  <img src="media/drift.png" alt="Representation drift with continuous targets vs. KODIAK's discrete codebook" width="900">
+</p>
+<p align="center"><em>Same encoder, same inputs. With continuous targets the latent clusters blur and separability is lost (top); KODIAK's Sinkhorn-balanced codebook anchors the representation on stable discrete concepts and yields patch-level concept maps (bottom).</em></p>
+
 **What KODIAK does.** KODIAK (**KO**debook **DI**stillation for **A**daptation) replaces continuous targets with
 a **discrete vocabulary of visual concepts**: a learnable codebook whose Sinkhorn-balanced assignments the student
 must predict for masked patches and across crops. Predicting categorical assignments instead of regressing

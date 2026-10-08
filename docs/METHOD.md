@@ -10,6 +10,8 @@ pretrained representation is distorted. The paper shows this directly: on DTD an
 pretraining *lowers* fine-tuning accuracy by 6 to 9 points, and layer-wise CKA between the adapted and the
 original model shows large drift (about 0.5) concentrated in the mid-to-late transformer layers.
 
+<p align="center"><img src="../media/drift.png" alt="Representation drift vs. KODIAK" width="900"></p>
+
 ## The idea: discrete, balanced codebook targets
 
 **KODIAK** (**KO**debook **DI**stillation for **A**daptation) keeps the DINO teacher-student protocol but changes
