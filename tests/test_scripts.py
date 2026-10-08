@@ -92,6 +92,28 @@ def classify_runs(pretrain_run, tiny_classify_config, tmp_path_factory):
     return runs
 
 
+class TestFindCheckpoint:
+    def test_nested_experiment_folder_is_found(self, tmp_path):
+        from train_classifier import find_checkpoint
+        exp = tmp_path / "dataset" / "exp_a"
+        exp.mkdir(parents=True)
+        (exp / "last.ckpt").write_bytes(b"x")
+        assert find_checkpoint(str(tmp_path / "dataset")) == str(exp / "last.ckpt")
+        assert find_checkpoint(str(exp)) == str(exp / "last.ckpt")
+        assert find_checkpoint(str(tmp_path / "missing")) is None
+        (tmp_path / "dataset" / "exp_b").mkdir()
+        (tmp_path / "dataset" / "exp_b" / "last.ckpt").write_bytes(b"x")
+        with pytest.raises(FileNotFoundError, match="2 experiments"):
+            find_checkpoint(str(tmp_path / "dataset"))
+
+    def test_best_by_train_loss(self, tmp_path):
+        from train_classifier import find_checkpoint
+        for name in ["kodiak-epoch=01-train_loss=2.5000.ckpt", "kodiak-epoch=02-train_loss=1.2500.ckpt", "last.ckpt"]:
+            (tmp_path / name).write_bytes(b"x")
+        assert find_checkpoint(str(tmp_path), "best").endswith("train_loss=1.2500.ckpt")
+        assert find_checkpoint(str(tmp_path), "last").endswith("last.ckpt")
+
+
 class TestClassify:
     @pytest.mark.parametrize("mode", ["finetune", "lineareval"])
     def test_results_json(self, classify_runs, mode):

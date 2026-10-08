@@ -131,6 +131,19 @@ class TestMotifLearner:
             if g["wd_multiplier"] == 0.0:
                 assert g["weight_decay"] == 0.0
 
+    def test_freeze_cls_head_reproduces_fixed_random_projection(self, tiny_kodiak):
+        learner = MotifLearner(model=tiny_kodiak, freeze_cls_prototype_head=True, batch_size=4)
+        head_ids = {id(p) for p in learner.prototype_cls_loss.cls_prototype_head.parameters()}
+        groups = learner._build_param_groups(scaled_lr=1e-3, weight_decay=0.04, num_layers=1)
+        in_opt = {id(p) for g in groups for p in g["params"]}
+        assert not (head_ids & in_opt)
+        assert id(tiny_kodiak.prototype_layer.layer.weight) in in_opt
+        # the encoder still receives gradients through the frozen head
+        total, *_ = learner.shared_step(_multicrop_batch(dict(
+            img_size=64, patch_size=16, local_crops_size=32, local_crops_number=2)), is_train=True)
+        total.backward()
+        assert any(p.grad is not None for p in tiny_kodiak.student_encoder.parameters())
+
     def test_cls_loss_disabled(self, tiny_kodiak):
         learner = MotifLearner(model=tiny_kodiak, prototype_cls_loss_weight=0.0, batch_size=4)
         assert learner.prototype_cls_loss is None

@@ -110,6 +110,8 @@ def parse_args():
                    help="Disable Sinkhorn-Knopp, use softmax instead")
     p.add_argument("--cls_weight", type=float, default=None,
                    help="Override CLS loss weight (set to 0 to disable)")
+    p.add_argument("--freeze_cls_head", action="store_true",
+                   help="Keep the CLS prototype head at its random init (reproduces pre-fix runs)")
 
     # Optimization flags
     p.add_argument("--compile", action="store_true",
@@ -178,6 +180,8 @@ def build_overrides(args) -> Dict[str, Any]:
         o["loss.use_sinkhorn"] = False
     if args.cls_weight is not None:
         o["loss.prototype_cls_loss_weight"] = args.cls_weight
+    if args.freeze_cls_head:
+        o["loss.freeze_cls_prototype_head"] = True
     # Optimization flags
     if args.compile:
         o["model.compile_model"] = True
@@ -279,6 +283,7 @@ def cfg_to_motif_kwargs(cfg) -> Dict[str, Any]:
 
         # Ablation flags
         use_sinkhorn=loss.get("use_sinkhorn", True),
+        freeze_cls_prototype_head=loss.get("freeze_cls_prototype_head", False),
 
         # Optimization
         compile_model=m.get("compile_model", False),

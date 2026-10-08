@@ -223,6 +223,18 @@ def find_checkpoint(path: str, checkpoint_type: str = "last") -> Optional[str]:
                 print("Warning: No best checkpoint found, falling back to last.ckpt")
                 return str(last_ckpt)
 
+        # Nothing directly inside: look one or more levels down (e.g. the dataset
+        # folder `checkpoints/pretraining/eurosat` containing one experiment folder).
+        nested = sorted(path.rglob("last.ckpt"))
+        if len(nested) == 1:
+            print(f"Found checkpoint in sub-folder: {nested[0]}")
+            return str(nested[0])
+        if len(nested) > 1:
+            listing = "\n".join(f"  {c.parent}" for c in nested)
+            raise FileNotFoundError(
+                f"{path} contains {len(nested)} experiments; pass the experiment folder explicitly:\n{listing}"
+            )
+
     return None
 
 

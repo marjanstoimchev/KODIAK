@@ -307,6 +307,10 @@ class MotifLearner(L.LightningModule):
         sinkhorn_iters: Optional[int] = None,
         # Ablation flags for controlled experiments
         use_sinkhorn: bool = True,  # If False, use softmax instead of Sinkhorn-Knopp
+        # Reproducibility: before Oct 2026 the CLS prototype head was (unintentionally)
+        # never optimized, i.e. it acted as a fixed random projection. Set True to
+        # reproduce those runs exactly.
+        freeze_cls_prototype_head: bool = False,
         **kwargs,
     ):
         super().__init__()
@@ -402,6 +406,10 @@ class MotifLearner(L.LightningModule):
                 center_momentum=center_momentum or 0.9,
                 n_global_crops=2,
             )
+            if freeze_cls_prototype_head:
+                print("CLS prototype head frozen at random init (freeze_cls_prototype_head=True)")
+                for p in self.prototype_cls_loss.cls_prototype_head.parameters():
+                    p.requires_grad = False
         else:
             self.prototype_cls_loss = None
         self.n_local_crops = n_local_crops
