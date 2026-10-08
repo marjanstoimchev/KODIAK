@@ -95,6 +95,11 @@ class TestSchedules:
         assert not should_skip_weight_decay("blocks.0.attn.qkv.weight")
         assert not should_skip_weight_decay("cls_token")
 
+    def test_lr_scaling_uses_per_device_batch_times_world_size(self, tiny_kodiak):
+        """Total batch 128 on 2 devices must scale like 128, not 256."""
+        learner = MotifLearner(model=tiny_kodiak, batch_size=64, lr=1e-4, max_epochs=1)
+        assert scale_lr(1e-4, learner.batch_size, 2) == pytest.approx(scale_lr(1e-4, 128, 1))
+
     def test_scale_lr(self):
         assert scale_lr(1e-3, 1024, 1) == pytest.approx(4e-3)
         assert scale_lr(1e-3, 256, 1) == pytest.approx(2e-3)

@@ -411,6 +411,9 @@ def main():
 
     # 5. Model
     motif_kwargs = cfg_to_motif_kwargs(cfg)
+    # LR scaling (sqrt_wrt_1024) multiplies the per-device batch size by world_size
+    # inside the learner, so pass the per-device value, not the total.
+    motif_kwargs["batch_size"] = per_gpu_batch_size
     model = MotifLearner(**motif_kwargs)
 
     # 6. Construct output directories
