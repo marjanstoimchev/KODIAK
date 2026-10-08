@@ -5,8 +5,8 @@ Structured configuration objects following Interface Segregation Principle.
 Breaks down large parameter lists into focused, cohesive configuration objects.
 """
 
-from dataclasses import dataclass, field, asdict
-from typing import Optional, Tuple, List
+from dataclasses import dataclass, asdict
+from typing import Optional, Tuple
 from pathlib import Path
 
 

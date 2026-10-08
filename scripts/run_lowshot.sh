@@ -29,7 +29,7 @@ set -e
 # Defaults
 # ─────────────────────────────────────────────────────────────────────
 GPUS=""
-METHODS="kodiak dinov3 mae ijepa moca"
+METHODS="kodiak"
 DATASETS="eurosat dtd oxford_pets"
 SHOTS="1 2 4 8 16"
 LABEL_SEEDS="0 1 42"
@@ -142,51 +142,50 @@ declare -A CONFIG_DIRS=(
 # Maps each (method, dataset, init_mode) to its SSL pretraining checkpoint.
 # These are the actual pretrained encoder weights, NOT trained classifiers.
 
+# Baseline checkpoints live outside this repository. Point these environment
+# variables at your own runs of the baseline methods (unset = method is skipped):
+#   DINOV3_WEIGHTS         official DINOv3 ViT-S/16 weights (.pth)
+#   DINOV3_CONTINUED_DIR   dir containing {dataset}/proto_4096/checkpoints/last.ckpt
+#   MAE_OUTPUT_DIR         dir containing pretraining/{dataset}/mae_{dataset}[_continued]/checkpoints/last.ckpt
+#   IJEPA_OUTPUT_DIR       dir containing pretraining/{dataset}/ijepa_{dataset}[_continued]/checkpoints/last.ckpt
+#   MOCA_OUTPUT_DIR        dir containing checkpoints/pretraining/{dataset}/moca_{dataset}[_continued]/last.ckpt
+DINOV3_WEIGHTS="${DINOV3_WEIGHTS:-dinov3_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth}"
+DINOV3_CONTINUED_DIR="${DINOV3_CONTINUED_DIR:-}"
+MAE_OUTPUT_DIR="${MAE_OUTPUT_DIR:-}"
+IJEPA_OUTPUT_DIR="${IJEPA_OUTPUT_DIR:-}"
+MOCA_OUTPUT_DIR="${MOCA_OUTPUT_DIR:-}"
+
 find_ssl_checkpoint() {
     local method="$1"
     local dataset="$2"
     local ckpt=""
+    local suffix=""
+    [[ "$INIT_MODE" == "continued" ]] && suffix="_continued"
 
     case "$method" in
         kodiak)
-            if [[ "$INIT_MODE" == "continued" ]]; then
-                ckpt="${CKPT_BASE_DIR}/checkpoints/pretraining/${dataset}/kodiak_${dataset}_continued_proto${PROTOTYPES}_koleo0.1_cls1.0_mc${LOCAL_CROPS_NUMBER}/last.ckpt"
-            else
-                ckpt="${CKPT_BASE_DIR}/checkpoints/pretraining/${dataset}/kodiak_${dataset}_proto${PROTOTYPES}_koleo0.1_cls1.0_mc${LOCAL_CROPS_NUMBER}/last.ckpt"
-            fi
+            ckpt="${CKPT_BASE_DIR}/checkpoints/pretraining/${dataset}/kodiak_${dataset}${suffix}_proto${PROTOTYPES}_koleo0.1_cls1.0_mc${LOCAL_CROPS_NUMBER}/last.ckpt"
             ;;
         dinov3)
             if [[ "$INIT_MODE" == "continued" ]]; then
-                ckpt="/home/marjans/DinoV3LightningTraining/prototype_analysis_dinov3_continued/pretraining/${dataset}/proto_4096/checkpoints/last.ckpt"
+                [[ -n "$DINOV3_CONTINUED_DIR" ]] && ckpt="${DINOV3_CONTINUED_DIR}/${dataset}/proto_4096/checkpoints/last.ckpt"
             else
                 # DINOv3 official pretrained weights (from-scratch baseline)
-                ckpt="/home/marjans/DinoV3LightningTraining/dinov3_official_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth"
+                ckpt="$DINOV3_WEIGHTS"
             fi
             ;;
         mae)
-            if [[ "$INIT_MODE" == "continued" ]]; then
-                ckpt="/home/marjans/mae_lightning/output/pretraining/${dataset}/mae_${dataset}_continued/checkpoints/last.ckpt"
-            else
-                ckpt="/home/marjans/mae_lightning/output/pretraining/${dataset}/mae_${dataset}/checkpoints/last.ckpt"
-            fi
+            [[ -n "$MAE_OUTPUT_DIR" ]] && ckpt="${MAE_OUTPUT_DIR}/pretraining/${dataset}/mae_${dataset}${suffix}/checkpoints/last.ckpt"
             ;;
         ijepa)
-            if [[ "$INIT_MODE" == "continued" ]]; then
-                ckpt="/home/marjans/ijepa_lightning/output/pretraining/${dataset}/ijepa_${dataset}_continued/checkpoints/last.ckpt"
-            else
-                ckpt="/home/marjans/ijepa_lightning/output/pretraining/${dataset}/ijepa_${dataset}/checkpoints/last.ckpt"
-            fi
+            [[ -n "$IJEPA_OUTPUT_DIR" ]] && ckpt="${IJEPA_OUTPUT_DIR}/pretraining/${dataset}/ijepa_${dataset}${suffix}/checkpoints/last.ckpt"
             ;;
         moca)
-            if [[ "$INIT_MODE" == "continued" ]]; then
-                ckpt="/home/marjans/MOCA/output/checkpoints/pretraining/${dataset}/moca_${dataset}_continued/last.ckpt"
-            else
-                ckpt="/home/marjans/MOCA/output/checkpoints/pretraining/${dataset}/moca_${dataset}/last.ckpt"
-            fi
+            [[ -n "$MOCA_OUTPUT_DIR" ]] && ckpt="${MOCA_OUTPUT_DIR}/checkpoints/pretraining/${dataset}/moca_${dataset}${suffix}/last.ckpt"
             ;;
         foundation)
             # DINOv3 foundation model — no domain adaptation, same weights for all datasets
-            ckpt="/home/marjans/DinoV3LightningTraining/dinov3_official_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth"
+            ckpt="$DINOV3_WEIGHTS"
             ;;
     esac
 

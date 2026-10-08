@@ -5,7 +5,7 @@ This module implements a flexible dataset factory using the registry pattern,
 allowing easy extension without modifying core code (Open/Closed Principle).
 """
 
-from typing import Dict, Type, Any, Optional
+from typing import Dict, Type
 from torch.utils.data import Dataset
 import logging
 
@@ -93,11 +93,11 @@ class DatasetRegistry:
                 error_msg += f"  - '{name}' ({dataset_cls.__name__})\n"
 
             error_msg += (
-                f"\n"
-                f"How to register a new dataset:\n"
-                f"  1. Import DatasetRegistry: from data.factory import DatasetRegistry\n"
-                f"  2. Decorate your class: @DatasetRegistry.register('your_name')\n"
-                f"  3. Your dataset will be available via the factory\n"
+                "\n"
+                "How to register a new dataset:\n"
+                "  1. Import DatasetRegistry: from src.data.utils import DatasetRegistry\n"
+                "  2. Decorate your class: @DatasetRegistry.register('your_name')\n"
+                "  3. Your dataset will be available via the factory\n"
             )
 
             raise ValueError(error_msg)

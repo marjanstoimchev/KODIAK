@@ -116,10 +116,13 @@ class ClassificationLearner(L.LightningModule):
 
         self.criterion = criterion
 
-        # Metrics
-        task = "multiclass" if num_classes > 2 else "binary"
-        self.train_acc = Accuracy(task=task, num_classes=num_classes if task == "multiclass" else None)
-        self.val_acc = Accuracy(task=task, num_classes=num_classes if task == "multiclass" else None)
+        # Metrics. The classifier always outputs `num_classes` logits (also for
+        # 2 classes), so the multiclass metric family is used throughout.
+        if num_classes < 2:
+            raise ValueError(f"num_classes must be >= 2, got {num_classes}")
+        task = "multiclass"
+        self.train_acc = Accuracy(task=task, num_classes=num_classes)
+        self.val_acc = Accuracy(task=task, num_classes=num_classes)
 
         # Top-5 accuracy (only for multiclass with >5 classes)
         if num_classes > 5:
@@ -131,8 +134,8 @@ class ClassificationLearner(L.LightningModule):
             self.val_acc_top5 = None
             self.test_acc_top5 = None
 
-        # Test metrics (matching ijepa_lightning)
-        self.test_acc = Accuracy(task=task, num_classes=num_classes if task == "multiclass" else None)
+        # Test metrics
+        self.test_acc = Accuracy(task=task, num_classes=num_classes)
 
         # Macro averaged
         self.test_f1_macro = F1Score(task=task, num_classes=num_classes, average="macro")
@@ -164,13 +167,13 @@ class ClassificationLearner(L.LightningModule):
 
         if detected_storage_tokens is None:
             detected_storage_tokens = 4  # DINOv3 official default
-            print(f"  No storage_tokens found in checkpoint, using num_storage_tokens=4")
+            print("  No storage_tokens found in checkpoint, using num_storage_tokens=4")
 
         # Detect mask_k_bias from state_dict
         for key in state_dict.keys():
             if 'qkv.bias_mask' in key:
                 detected_mask_k_bias = True
-                print(f"  Auto-detected mask_k_bias=True from checkpoint state_dict")
+                print("  Auto-detected mask_k_bias=True from checkpoint state_dict")
                 break
 
         if detected_mask_k_bias is None:
@@ -218,7 +221,7 @@ class ClassificationLearner(L.LightningModule):
             pretrained_path = hparams['pretrained_path']
             # Check if this looks like a pretraining path
             if pretrained_path and 'pretraining' in str(pretrained_path):
-                print(f"Classification checkpoint detected (skipping pretrained_path)")
+                print("Classification checkpoint detected (skipping pretrained_path)")
                 # Remove pretrained_path from hparams so model doesn't try to load it
                 hparams['pretrained_path'] = None
 
@@ -411,8 +414,8 @@ class ClassificationLearner(L.LightningModule):
             else:
                 head_params.append(p)
 
-        # Use fused optimizer if available (faster on GPU)
-        use_fused = (self.device.type == 'cuda') and hasattr(torch.optim.AdamW, "fused")
+        # Use fused optimizer on GPU (faster)
+        use_fused = self.device.type == 'cuda'
 
         lr = self.hparams.get('lr', 1e-3)
         weight_decay = self.hparams.get('weight_decay', 0.05)

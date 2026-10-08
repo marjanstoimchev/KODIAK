@@ -30,6 +30,7 @@ from src.learners import ClassificationLearner
 from src.data import ClassificationDataModule
 from src.data.utils import SamplerType
 from src.utils.config import load_config, override_config
+from src.utils.runtime import resolve_accelerator_and_devices, count_devices
 
 
 def find_checkpoint(path: str, checkpoint_type: str = "best") -> Optional[str]:
@@ -89,6 +90,10 @@ def parse_args():
                    help="GPU devices (e.g., '0' or '0,1')")
     p.add_argument("--batch_size", type=int, default=None,
                    help="Override batch size")
+    p.add_argument("--root_dir", type=str, default=None,
+                   help="Root directory of a folder-based (custom) dataset (overrides data.root_dir)")
+    p.add_argument("--num_workers", type=int, default=None,
+                   help="DataLoader workers (overrides data.num_workers)")
 
     return p.parse_args()
 
@@ -139,12 +144,20 @@ def main():
     # Load config
     cfg = load_config(args.config)
 
-    # Override batch size if provided
+    # CLI overrides
+    overrides = {}
     if args.batch_size is not None:
-        cfg = override_config(cfg, {"data.batch_size": args.batch_size})
+        overrides["data.batch_size"] = args.batch_size
+    if args.root_dir is not None:
+        overrides["data.root_dir"] = args.root_dir
+    if args.num_workers is not None:
+        overrides["data.num_workers"] = args.num_workers
+    if overrides:
+        cfg = override_config(cfg, overrides)
 
     # Parse devices
-    devices = [int(x.strip()) for x in args.devices.split(",")]
+    device_list = [int(x.strip()) for x in args.devices.split(",")]
+    accelerator, devices = resolve_accelerator_and_devices(device_list)
 
     # Find checkpoint
     ckpt_path = find_checkpoint(args.checkpoint, args.checkpoint_type)
@@ -164,8 +177,8 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Compute per-GPU batch size
-    num_gpus = len(devices)
-    per_gpu_batch_size = cfg.data.batch_size // num_gpus if num_gpus > 0 else cfg.data.batch_size
+    num_gpus = count_devices(devices)
+    per_gpu_batch_size = max(1, cfg.data.batch_size // num_gpus)
 
     # Get augmentation config
     aug_config = cfg.data.get("augmentation", None)
@@ -177,7 +190,7 @@ def main():
     image_size = cfg.data.get("image_size", aug.get("global_crops_size", 256))
 
     # Parse sampler type
-    sampler_type_str = cfg.data.get("sampler_type", "distributed").upper()
+    sampler_type_str = str(cfg.data.get("sampler_type", "distributed")).upper()
     sampler_type = SamplerType[sampler_type_str]
 
     # Create datamodule
@@ -196,6 +209,7 @@ def main():
         sampler_type=sampler_type,
         seed=cfg.experiment.seed,
         csv_path=cfg.data.get("csv_path", None),
+        root_dir=cfg.data.get("root_dir", None),
         magnification=cfg.data.get("magnification", None),
         root_path=cfg.data.get("root_path", None),
         hf_dataset_name=cfg.data.get("hf_dataset_name", None),
@@ -209,7 +223,7 @@ def main():
 
     # Create trainer for evaluation
     trainer = pl.Trainer(
-        accelerator="gpu" if torch.cuda.is_available() else "cpu",
+        accelerator=accelerator,
         devices=devices,
         precision=cfg.training.get("precision", "bf16-mixed"),
         logger=False,
@@ -253,8 +267,8 @@ def main():
         print("\n" + "=" * 60)
         print("Evaluation Complete!")
         print(f"Test acc:   {results['test_acc']:.4f}")
-        print(f"Test F1:    {results.get('test_f1_macro', 'N/A'):.4f}" if isinstance(results.get('test_f1_macro'), float) else f"Test F1:    N/A")
-        print(f"Test AUROC: {results.get('test_auroc', 'N/A'):.4f}" if isinstance(results.get('test_auroc'), float) else f"Test AUROC: N/A")
+        print(f"Test F1:    {results.get('test_f1_macro', 'N/A'):.4f}" if isinstance(results.get('test_f1_macro'), float) else "Test F1:    N/A")
+        print(f"Test AUROC: {results.get('test_auroc', 'N/A'):.4f}" if isinstance(results.get('test_auroc'), float) else "Test AUROC: N/A")
         print(f"Test loss:  {results['test_loss']:.4f}")
         print(f"Results saved to: {results_file}")
         print("=" * 60)

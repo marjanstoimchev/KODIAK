@@ -186,9 +186,16 @@ if [[ "$USE_SINGULARITY" == "true" ]]; then
     export SINGULARITYENV_TORCH_HOME="$TORCH_HOME"
     export SINGULARITYENV_PYTORCH_CUDA_ALLOC_CONF="$PYTORCH_CUDA_ALLOC_CONF"
     export SINGULARITYENV_SLURM_JOB_NAME="bash"
+    # Forward the dataset root (used by configs/pancreatic/*.yaml) into the container
+    EXTRA_BINDS=()
+    if [[ -n "$KODIAK_DATA_DIR" ]]; then
+        export SINGULARITYENV_KODIAK_DATA_DIR="$KODIAK_DATA_DIR"
+        EXTRA_BINDS+=(--bind "$KODIAK_DATA_DIR":"$KODIAK_DATA_DIR")
+    fi
 
     srun singularity exec --nv \
         --bind "$SLURM_SUBMIT_DIR":"$SLURM_SUBMIT_DIR" \
+        "${EXTRA_BINDS[@]}" \
         --bind /tmp:/tmp \
         --bind "$HF_HOME":"$HF_HOME" \
         --bind "$TORCH_HOME":"$TORCH_HOME" \

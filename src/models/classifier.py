@@ -151,7 +151,7 @@ class LinearClassifier(nn.Module):
             if detected_storage is None:
                 # No storage_tokens found, assume 0
                 detected_storage = 0
-                print(f"  No storage_tokens found, using num_storage_tokens=0")
+                print("  No storage_tokens found, using num_storage_tokens=0")
 
         # Try to find qkv.bias_mask to detect mask_k_bias
         if detected_mask_bias is None:
@@ -159,12 +159,12 @@ class LinearClassifier(nn.Module):
                 key = f"{prefix}blocks.0.attn.qkv.bias_mask"
                 if key in state:
                     detected_mask_bias = True
-                    print(f"  Detected mask_k_bias=True from checkpoint")
+                    print("  Detected mask_k_bias=True from checkpoint")
                     break
             if detected_mask_bias is None:
                 # No bias_mask found, assume False
                 detected_mask_bias = False
-                print(f"  No qkv.bias_mask found, using mask_k_bias=False")
+                print("  No qkv.bias_mask found, using mask_k_bias=False")
 
         return detected_storage, detected_mask_bias
 

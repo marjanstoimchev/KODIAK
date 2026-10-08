@@ -1,6 +1,5 @@
-"""Logger setup for M³-Net training."""
+"""Logger setup for KODIAK training (CSV, TensorBoard, Weights & Biases)."""
 
-import pytorch_lightning as pl
 from pytorch_lightning.loggers import CSVLogger, TensorBoardLogger, WandbLogger
 from pathlib import Path
 from typing import Optional, Union

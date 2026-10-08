@@ -120,8 +120,11 @@ class Kodiak(nn.Module):
         num_masked = mask.sum(dim=1) # (B,)
         num_visible = N - num_masked
 
-        max_masked = num_masked.max().item()
-        max_visible = num_visible.max().item()
+        if bool((num_visible == 0).any()):
+            raise ValueError("Every sample must keep at least one visible patch (mask ratio < 1.0)")
+
+        max_masked = int(num_masked.max().item())
+        max_visible = int(num_visible.max().item())
 
         # 2. Prepare containers (initialized with 0 for padding)
         visible_indices = torch.zeros(B, max_visible, dtype=torch.long, device=device)
@@ -130,19 +133,25 @@ class Kodiak(nn.Module):
         # 3. Fill row by row (Only efficient way for truly ragged tensors in PyTorch)
         # Note: This loop is fast enough on GPU for batch size ~256
 
-        sorted_indices = torch.argsort(mask.int(), dim=1) # (B, N)
+        # Stable sort keeps spatial order within the visible / masked groups
+        sorted_indices = torch.argsort(mask.int(), dim=1, stable=True) # (B, N)
 
         for b in range(B):
-            n_vis = num_visible[b].item()
-            n_msk = num_masked[b].item()
+            n_vis = int(num_visible[b].item())
+            n_msk = int(num_masked[b].item())
 
             visible_indices[b, :n_vis] = sorted_indices[b, :n_vis]
             if n_vis < max_visible:
                 visible_indices[b, n_vis:] = visible_indices[b, n_vis-1]
 
-            masked_indices[b, :n_msk] = sorted_indices[b, N-n_msk:]
-            if n_msk < max_masked:
-                masked_indices[b, n_msk:] = masked_indices[b, n_msk-1]
+            if n_msk > 0:
+                masked_indices[b, :n_msk] = sorted_indices[b, N-n_msk:]
+                if n_msk < max_masked:
+                    masked_indices[b, n_msk:] = masked_indices[b, n_msk-1]
+            elif max_masked > 0:
+                # No masked patches in this row: pad with a visible index. The decoder
+                # overwrites that slot with the mask token, but no loss is computed on it.
+                masked_indices[b, :] = visible_indices[b, 0]
 
         return visible_indices, masked_indices
 
@@ -253,7 +262,6 @@ class Kodiak(nn.Module):
                 - global_masks: List of masks (for mask loss)
         """
         B = global_crops[0].shape[0]
-        device = global_crops[0].device
 
         # ============================================
         # 1. Teacher Forward: Encode global crops (unmasked)

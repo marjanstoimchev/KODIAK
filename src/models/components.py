@@ -13,7 +13,7 @@ import logging
 import sys
 from functools import partial
 from pathlib import Path
-from typing import Tuple, List, Dict, Any, Optional
+from typing import Tuple, Dict
 
 import torch
 import torch.nn as nn
@@ -30,7 +30,6 @@ from dinov3.layers import (
     Mlp,
     PatchEmbed,
     RopePositionEmbedding,
-    SelfAttention,
 )
 from dinov3.layers.block import SelfAttentionBlock
 from dinov3.utils import named_apply

@@ -1,5 +1,7 @@
 # KODIAK
 
+[![CI](https://github.com/marjanstoimchev/KODIAK/actions/workflows/ci.yml/badge.svg)](https://github.com/marjanstoimchev/KODIAK/actions/workflows/ci.yml)
+
 PyTorch Lightning implementation of **KODIAK** — a self-supervised learning method combining masked image modeling with prototype learning using a teacher-student architecture.
 
 ## Architecture
@@ -15,7 +17,7 @@ Uses a **DINOv3 ViT-Small/16** backbone:
 
 | Dataset | Type | Classes | Source |
 |---------|------|---------|--------|
-| **Pancreatic** | Custom folder | 7 | Local: `/home/marjans/Datasets/pancreatic/SLIDE-3210` |
+| **Pancreatic** | Custom folder | 12 | Local folder: `$KODIAK_DATA_DIR/pancreatic` (see below) |
 | CIFAR-100 | HuggingFace | 100 | `uoft-cs/cifar100` |
 | DTD | HuggingFace | 47 | `cansa/Describable-Textures-Dataset-DTD` |
 | EuroSAT | HuggingFace | 10 | `blanchon/EuroSAT_RGB` |
@@ -27,10 +29,42 @@ See [DATASETS.md](DATASETS.md) for full dataset documentation and per-dataset co
 
 ## Installation
 
+Requires Python 3.10+ and PyTorch 2.1+.
+
 ```bash
 git clone https://github.com/marjanstoimchev/KODIAK.git
 cd KODIAK
+python -m venv .venv && source .venv/bin/activate   # or: conda create -n kodiak python=3.11
+pip install torch torchvision                        # pick the build for your CUDA version: https://pytorch.org
 pip install -r requirements.txt
+```
+
+- `requirements.txt` lists the core dependencies with loose version bounds.
+- `requirements-lock.txt` is the exact, frozen environment used for the paper experiments (also used by `Singularity.def`).
+- Weights & Biases logging is optional: `pip install wandb`.
+- The DINOv3 ViT-S/16 weights used for *continued* pretraining are shipped in `dinov3_weights/` and are subject to the [DINOv3 license](dinov3/LICENSE.md).
+
+All commands are run from the repository root (the scripts add it to `sys.path`; nothing needs to be installed as a package).
+
+### Dataset location
+
+HuggingFace datasets are downloaded automatically. The folder-based **Pancreatic** dataset is located through the
+`KODIAK_DATA_DIR` environment variable, referenced from `configs/pancreatic/*.yaml` as `${KODIAK_DATA_DIR}/pancreatic`:
+
+```bash
+export KODIAK_DATA_DIR=/path/to/datasets        # contains pancreatic/<class>/<image>.png
+# or override per run:
+python scripts/train.py --config configs/pancreatic/pretrain.yaml --root_dir /path/to/pancreatic
+```
+
+Any `${VAR}` / `~` in a YAML config is expanded when the config is loaded.
+
+### Smoke test
+
+Runs one batch of the full pipeline on CPU/GPU to check the installation:
+
+```bash
+python scripts/train.py --config configs/eurosat/pretrain.yaml --fast_dev_run --num_workers 0 --precision 32
 ```
 
 ---
@@ -586,7 +620,7 @@ output/
 
 ```
 output/
-└── logs/classification/{dataset}/{pretrain_folder}/
+└── logs/classification/{dataset}/{pretrain_folder}/      # e.g. proto128_koleo0.1_cls1_mc8
     ├── finetune_seed_0/
     │   ├── test_results.json        # final test metrics
     │   └── training_summary.json
@@ -651,8 +685,8 @@ python scripts/train.py \
 | `--batch_size` | Total batch size | from config |
 | `--learning_rate` | Peak learning rate | from config |
 | `--max_epochs` | Training epochs | from config |
-| `--num_prototypes` | Number of prototype vectors | 4096 |
-| `--koleo_weight` | KoLeo regularization weight | 0.1 |
+| `--num_prototypes` | Number of prototype vectors | from config |
+| `--koleo_weight` | KoLeo regularization weight | from config |
 | `--cls_weight` | Multi-crop CLS distillation weight | from config |
 | `--multi_crop` | Enable multi-crop (2 global + 8 local) | off |
 | `--no_sinkhorn` | Use softmax instead of Sinkhorn-Knopp | off |
@@ -660,10 +694,15 @@ python scripts/train.py \
 | `--precision` | Training precision | bf16-mixed |
 | `--logger` | `csv`, `tensorboard`, or `wandb` | csv |
 | `--name` | Experiment name | from config |
-| `--resume` | Resume from checkpoint | — |
+| `--resume` | Resume from a Lightning checkpoint (`last.ckpt`) | — |
 | `--pretrained_path` | Initialize from pretrained weights | — |
-| `--save_every_n_epochs` | Save intermediate checkpoints | — |
+| `--save_every_n_epochs` | Save a checkpoint every N epochs (enables `last.ckpt` updates for `--resume`) | from config (off) |
+| `--seed` | Random seed | from config |
+| `--root_dir` | Folder-based dataset root (overrides `data.root_dir`) | from config |
+| `--num_workers` | DataLoader workers (overrides `data.num_workers`) | from config |
 | `--fast_dev_run` | Quick sanity check (1 batch) | off |
+
+Without `--save_every_n_epochs` only the final `last.ckpt` is written when training completes.
 
 ### `train_classifier.py` — Classification
 
@@ -699,7 +738,11 @@ python scripts/train_classifier.py \
 | `--seed` | Random seed | from config |
 | `--logger` | `csv`, `tensorboard`, or `wandb` | csv |
 | `--eval_only` | Test evaluation only (no training) | off |
+| `--root_dir` | Folder-based dataset root (overrides `data.root_dir`) | from config |
+| `--num_workers` | DataLoader workers (overrides `data.num_workers`) | from config |
 | `--fast_dev_run` | Quick sanity check | off |
+
+After training, the checkpoint with the lowest `val_loss` is evaluated on the test set and the metrics are written to `test_results.json`.
 
 ### `eval_knn.py` — k-NN Evaluation
 
@@ -729,6 +772,8 @@ python scripts/eval_knn.py \
 | `--concat_cls_patch` | Concatenate CLS + mean patch tokens | off |
 | `--output_base_dir` | Base output directory | output |
 | `--seeds` | Evaluation seeds, space-separated | "42" |
+| `--root_dir` | Folder-based dataset root (overrides `data.root_dir`) | from config |
+| `--num_workers` | DataLoader workers (overrides `data.num_workers`) | from config |
 
 ### `eval_lowshot.py` — K-Shot Evaluation
 
@@ -753,7 +798,15 @@ python scripts/eval_lowshot.py \
 | `--freeze_backbone` | Freeze backbone (linear probing) | off |
 | `--batch_size` | Batch size | from config |
 | `--learning_rate` | Learning rate | from config |
-| `--max_epochs` | Training epochs | from config |
+| `--max_epochs` | Training epochs | 100 |
+| `--output_dir` | Base output directory | output/lowshot |
+| `--method_tag` | Sub-folder name for the method | auto from checkpoint |
+| `--root_dir` | Folder-based dataset root (overrides `data.root_dir`) | from config |
+| `--num_workers` | DataLoader workers (overrides `data.num_workers`) | from config |
+
+The baseline methods handled by `scripts/run_lowshot.sh` (`dinov3`, `mae`, `ijepa`, `moca`) are not part of this
+repository. Point `DINOV3_WEIGHTS`, `DINOV3_CONTINUED_DIR`, `MAE_OUTPUT_DIR`, `IJEPA_OUTPUT_DIR` and `MOCA_OUTPUT_DIR`
+at your own checkpoints; methods whose variable is unset are skipped.
 
 ---
 
@@ -867,7 +920,9 @@ USE_SINGULARITY=true SIF_IMAGE=/shared/containers/pytorch.sif \
     sbatch scripts/slurm/run_experiment.sh
 ```
 
-The scripts automatically bind-mount the repo directory, HuggingFace/PyTorch caches, `/tmp`, and shared memory into the container.
+The scripts automatically bind-mount the repo directory, HuggingFace/PyTorch caches, `/tmp`, shared memory and
+`$KODIAK_DATA_DIR` (when set) into the container. Building the image (`Singularity.def`) expects a local
+`flash_attn` wheel next to the definition file; see the `%files` section.
 
 ---
 
@@ -950,8 +1005,10 @@ KODIAK/
 │   │   ├── datasets/            # HuggingFace and custom dataset wrappers
 │   │   └── utils/               # Samplers, registry
 │   ├── utils/                   # Configuration and logging
-│   │   ├── config.py            # YAML config loader with CLI overrides
+│   │   ├── config.py            # YAML config loader (env-var expansion, CLI overrides)
 │   │   ├── config_dataclasses.py # Typed config dataclasses
+│   │   ├── config_validation.py # Config sanity checks
+│   │   ├── runtime.py           # Accelerator / device resolution (GPU or CPU)
 │   │   └── loggers.py           # CSV, TensorBoard, WandB logger setup
 │   └── callbacks/               # Training callbacks
 │       ├── timer.py             # TrainingTimer (GPU hours, epoch time)
@@ -959,6 +1016,7 @@ KODIAK/
 ├── scripts/
 │   ├── train.py                 # Pretraining entry point
 │   ├── train_classifier.py      # Classification entry point
+│   ├── eval.py                  # Stand-alone test evaluation of a classifier checkpoint
 │   ├── eval_knn.py              # k-NN evaluation
 │   ├── eval_lowshot.py          # K-shot evaluation
 │   ├── run_sweep.sh             # Full pretrain + classify pipeline
@@ -981,11 +1039,38 @@ KODIAK/
 │   ├── NCTCRCHE100K/
 │   ├── imagenet1k/
 │   └── pancreatic/
+├── tests/                       # pytest suite (unit + end-to-end CLI tests, CPU only)
 ├── dinov3/                      # DINOv3 library (backbone, utilities)
+├── dinov3_weights/              # DINOv3 ViT-S/16 weights for continued pretraining
 ├── DATASETS.md                  # Dataset documentation and per-dataset examples
 ├── ABLATIONS.md                 # Ablation study documentation
-└── requirements.txt
+├── requirements.txt             # Core dependencies
+├── requirements-dev.txt         # + pytest, ruff
+└── requirements-lock.txt        # Exact environment used for the paper (Singularity)
 ```
+
+---
+
+## Development
+
+```bash
+pip install -r requirements-dev.txt
+make lint        # ruff (undefined names, unused imports, syntax errors)
+make test-fast   # unit tests (seconds)
+make test        # unit + end-to-end CLI tests on CPU (a few minutes)
+```
+
+The end-to-end tests run every entry point (`train.py`, `train_classifier.py`, `eval_knn.py`, `eval_lowshot.py`,
+`eval.py`, `aggregate_lowshot.py`) on a tiny synthetic image-folder dataset with a 1-block ViT, so no GPU or dataset
+download is needed. The same suite runs in GitHub Actions on every push and pull request.
+
+---
+
+## License
+
+The KODIAK code in `src/`, `scripts/`, `configs/` and `tests/` is released under the terms in `LICENSE` (to be added).
+The vendored DINOv3 library (`dinov3/`) and the pretrained weights in `dinov3_weights/` are distributed under the
+[DINOv3 License Agreement](dinov3/LICENSE.md).
 
 ---
 

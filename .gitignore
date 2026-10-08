@@ -48,3 +48,15 @@ paper.tex
 # OS
 .DS_Store
 Thumbs.db
+
+# Tooling
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+.env
+wandb/
+lightning_logs/

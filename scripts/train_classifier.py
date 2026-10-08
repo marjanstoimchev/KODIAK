@@ -65,7 +65,9 @@ from src.learners import ClassificationLearner
 from src.data import ClassificationDataModule
 from src.data.utils import SamplerType
 from src.utils.config import load_config, override_config, save_config
+from src.utils.config_validation import check_config
 from src.utils.loggers import get_logger_from_config
+from src.utils.runtime import resolve_accelerator_and_devices, count_devices
 from src.callbacks import TrainingTimer
 
 
@@ -98,6 +100,10 @@ def extract_pretraining_info(checkpoint_path: str) -> Dict[str, Any]:
         info["cls_loss_weight"] = hparams.get("prototype_cls_loss_weight", hparams.get("cls_loss_weight", None))
         info["projector_dim"] = hparams.get("projector_dim", None)
         info["multi_crop"] = hparams.get("multi_crop", False)
+        info["n_local_crops"] = hparams.get("n_local_crops", 0)
+        # The pretraining learner does not store `multi_crop`; infer it from n_local_crops
+        if not info["multi_crop"] and info["n_local_crops"] and info["n_local_crops"] > 0:
+            info["multi_crop"] = True
         info["mask_ratio"] = hparams.get("mask_ratio", None)
         info["patch_loss_weight"] = hparams.get("patch_loss_weight", None)
         info["prototype_loss_weight"] = hparams.get("prototype_loss_weight", None)
@@ -118,7 +124,7 @@ def build_pretraining_folder_name(pretrain_info: Dict[str, Any]) -> str:
     """
     Build a folder name from pretraining info.
 
-    Returns something like: proto2048_koleo0.1_cls1_mc
+    Returns something like: proto2048_koleo0.1_cls1_mc8
     """
     parts = []
 
@@ -146,9 +152,10 @@ def build_pretraining_folder_name(pretrain_info: Dict[str, Any]) -> str:
             cls_str = str(cls_weight)
         parts.append(f"cls{cls_str}")
 
-    # Multi-crop flag
+    # Multi-crop flag (with number of local crops when known)
     if pretrain_info.get("multi_crop", False):
-        parts.append("mc")
+        n_local = pretrain_info.get("n_local_crops", 0)
+        parts.append(f"mc{n_local}" if n_local else "mc")
 
     # If we couldn't extract any info, use "unknown"
     if not parts:
@@ -213,9 +220,40 @@ def find_checkpoint(path: str, checkpoint_type: str = "last") -> Optional[str]:
             # Fallback to last.ckpt if no loss-based checkpoint found
             last_ckpt = path / "last.ckpt"
             if last_ckpt.exists():
-                print(f"Warning: No best checkpoint found, falling back to last.ckpt")
+                print("Warning: No best checkpoint found, falling back to last.ckpt")
                 return str(last_ckpt)
 
+    return None
+
+
+def find_classification_checkpoint(checkpoint_dir: Path) -> Optional[str]:
+    """Pick the checkpoint to evaluate from a classification run directory.
+
+    Priority: lowest ``val_loss`` encoded in a ``classifier-*.ckpt`` filename,
+    then ``last.ckpt``, then the most recently modified ``*.ckpt``.
+    """
+    checkpoint_dir = Path(checkpoint_dir)
+    if not checkpoint_dir.is_dir():
+        return None
+
+    best_ckpt, best_loss = None, float("inf")
+    for ckpt in checkpoint_dir.glob("*.ckpt"):
+        if ckpt.name == "last.ckpt":
+            continue
+        match = re.search(r"val_loss[=_](\d+\.?\d*)", ckpt.name)
+        if match and float(match.group(1)) < best_loss:
+            best_loss = float(match.group(1))
+            best_ckpt = ckpt
+    if best_ckpt is not None:
+        return str(best_ckpt)
+
+    last_ckpt = checkpoint_dir / "last.ckpt"
+    if last_ckpt.exists():
+        return str(last_ckpt)
+
+    ckpts = list(checkpoint_dir.glob("*.ckpt"))
+    if ckpts:
+        return str(sorted(ckpts, key=lambda x: x.stat().st_mtime)[-1])
     return None
 
 
@@ -256,6 +294,10 @@ def parse_args():
     p.add_argument("--log_base_dir", type=str, help="Override logging.base_dir")
     p.add_argument("--checkpoint_base_dir", type=str, help="Override training.checkpoint.base_dir")
     p.add_argument("--seed", type=int, help="Random seed (overrides config and PL_GLOBAL_SEED)")
+    p.add_argument("--root_dir", type=str, default=None,
+                   help="Root directory of a folder-based (custom) dataset (overrides data.root_dir)")
+    p.add_argument("--num_workers", type=int, default=None,
+                   help="DataLoader workers (overrides data.num_workers)")
     p.add_argument("--eval_only", action="store_true",
                    help="Only run test evaluation on existing checkpoint (no training)")
 
@@ -318,6 +360,10 @@ def build_overrides(args) -> Dict[str, Any]:
         o["training.checkpoint.dirpath"] = args.checkpoint_dir
     if args.seed is not None:
         o["experiment.seed"] = args.seed
+    if args.root_dir is not None:
+        o["data.root_dir"] = args.root_dir
+    if args.num_workers is not None:
+        o["data.num_workers"] = args.num_workers
 
     return o
 
@@ -400,16 +446,10 @@ def main():
         print(f"Applying overrides: {overrides}")
         cfg = override_config(cfg, overrides)
 
-    # Validate configuration (optional, requires pydantic)
-    try:
-        from src.utils.config_validation import validate_config
-        validate_config(cfg.to_dict())
-        print("Configuration validated successfully")
-    except ImportError:
-        print("Pydantic not installed - skipping config validation")
-    except Exception as e:
-        print(f"Warning: Config validation failed: {e}")
-        print("Continuing anyway...")
+    # Validate configuration
+    if not check_config(cfg.to_dict()):
+        sys.exit(1)
+    print("Configuration validated successfully")
 
     # 2. Seed & precision
     pl.seed_everything(cfg.experiment.seed, workers=True)
@@ -428,25 +468,20 @@ def main():
     print(f"Freeze:        {cfg.model.get('freeze_backbone', False)}")
     print(f"Batch Size:    {cfg.data.batch_size}")
     print(f"Learning Rate: {cfg.optimizer.get('learning_rate', cfg.optimizer.get('lr', 1e-4))}")
-    print(f"Precision:     {cfg.training.precision}")
-    print(f"Devices:       {cfg.training.devices}")
+    print(f"Precision:     {cfg.training.get('precision', 'bf16-mixed')}")
+    print(f"Devices:       {cfg.training.get('devices', 'auto')}")
     print("=" * 80 + "\n")
 
     # 4. DataModule (NO MASKING for classification, smart train/val/test splitting)
     # Compute per-GPU batch size (DinoV3 style: batch_size is TOTAL, divide by num GPUs)
-    devices = cfg.training.devices
-    if isinstance(devices, list):
-        num_gpus = len(devices)
-    elif devices == "auto":
-        num_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 1
-    else:
-        num_gpus = int(devices) if devices else 1
+    accelerator, devices = resolve_accelerator_and_devices(cfg.training.get("devices", "auto"))
+    num_gpus = count_devices(devices)
 
-    per_gpu_batch_size = cfg.data.batch_size // num_gpus if num_gpus > 0 else cfg.data.batch_size
-    print(f"Batch size: {cfg.data.batch_size} total -> {per_gpu_batch_size} per GPU ({num_gpus} GPUs)")
+    per_gpu_batch_size = max(1, cfg.data.batch_size // num_gpus)
+    print(f"Batch size: {cfg.data.batch_size} total -> {per_gpu_batch_size} per device ({num_gpus} x {accelerator})")
 
     # Parse sampler_type from config (default: DISTRIBUTED)
-    sampler_type_str = cfg.data.get("sampler_type", "distributed").upper()
+    sampler_type_str = str(cfg.data.get("sampler_type", "distributed")).upper()
     sampler_type = SamplerType[sampler_type_str]
 
     # Get augmentation config with defaults
@@ -575,17 +610,18 @@ def main():
         ckpt_every_n_epochs = None
         ckpt_filename = "classifier-{epoch:02d}-{val_loss:.4f}"
 
+    checkpoint_callback = ModelCheckpoint(
+        monitor=ckpt_monitor,
+        mode=ckpt_mode,
+        save_top_k=ckpt_save_top_k,
+        save_last=ckpt_save_last,
+        every_n_epochs=ckpt_every_n_epochs,
+        dirpath=str(checkpoint_dir),
+        filename=ckpt_filename,
+        verbose=True,
+    )
     callbacks = [
-        ModelCheckpoint(
-            monitor=ckpt_monitor,
-            mode=ckpt_mode,
-            save_top_k=ckpt_save_top_k,
-            save_last=ckpt_save_last,
-            every_n_epochs=ckpt_every_n_epochs,
-            dirpath=str(checkpoint_dir),
-            filename=ckpt_filename,
-            verbose=True,
-        ),
+        checkpoint_callback,
         LearningRateMonitor(logging_interval="step"),
         TrainingTimer(save_dir=str(log_dir)),
     ]
@@ -618,8 +654,8 @@ def main():
     # 9. Trainer
     trainer = pl.Trainer(
         max_epochs=cfg.training.max_epochs,
-        accelerator="gpu" if torch.cuda.is_available() else "cpu",
-        devices=cfg.training.devices,
+        accelerator=accelerator,
+        devices=devices,
         num_nodes=cfg.training.get("num_nodes", 1),
         strategy=strategy,
         precision=cfg.training.get("precision", "bf16-mixed"),
@@ -639,21 +675,11 @@ def main():
         print("EVAL-ONLY MODE: Running Test Evaluation")
         print("=" * 60)
 
-        # Find checkpoint to evaluate
-        best_ckpt = checkpoint_dir / "best.ckpt"
-        last_ckpt = checkpoint_dir / "last.ckpt"
-
-        if best_ckpt.exists():
-            eval_ckpt = str(best_ckpt)
-        elif last_ckpt.exists():
-            eval_ckpt = str(last_ckpt)
-        else:
-            # Find any checkpoint
-            ckpts = list(checkpoint_dir.glob("*.ckpt"))
-            if not ckpts:
-                print(f"ERROR: No checkpoint found in {checkpoint_dir}")
-                sys.exit(1)
-            eval_ckpt = str(sorted(ckpts, key=lambda x: x.stat().st_mtime)[-1])
+        # Find checkpoint to evaluate: best (lowest val_loss in filename) > last > newest
+        eval_ckpt = find_classification_checkpoint(checkpoint_dir)
+        if eval_ckpt is None:
+            print(f"ERROR: No checkpoint found in {checkpoint_dir}")
+            sys.exit(1)
 
         print(f"Using checkpoint: {eval_ckpt}")
 
@@ -711,15 +737,16 @@ def main():
     print("Running Test Evaluation...")
     print("=" * 60)
 
-    # Load best checkpoint for testing (if exists)
-    best_ckpt = checkpoint_dir / "best.ckpt"
-    last_ckpt = checkpoint_dir / "last.ckpt"
-
-    if best_ckpt.exists():
-        test_results = trainer.test(model, datamodule=datamodule, ckpt_path=str(best_ckpt))
-    elif last_ckpt.exists():
-        test_results = trainer.test(model, datamodule=datamodule, ckpt_path=str(last_ckpt))
+    # Load the best checkpoint (lowest val_loss) for testing; fall back to last / in-memory weights
+    best_path = checkpoint_callback.best_model_path
+    if best_path and Path(best_path).exists():
+        print(f"Testing best checkpoint: {best_path}")
+        test_results = trainer.test(model, datamodule=datamodule, ckpt_path=best_path)
+    elif (checkpoint_dir / "last.ckpt").exists():
+        print(f"Testing last checkpoint: {checkpoint_dir / 'last.ckpt'}")
+        test_results = trainer.test(model, datamodule=datamodule, ckpt_path=str(checkpoint_dir / "last.ckpt"))
     else:
+        print("Testing in-memory weights (no checkpoint saved)")
         test_results = trainer.test(model, datamodule=datamodule)
 
     # 13. Save test results to JSON

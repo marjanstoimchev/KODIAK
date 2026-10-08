@@ -26,12 +26,10 @@ from typing import Optional, List, Dict, Any
 
 import numpy as np
 import torch
-import torch.distributed as dist
 import pytorch_lightning as L
 from torch.optim import AdamW
-from torch.optim.lr_scheduler import LambdaLR
 
-from src.models import Kodiak, MaskedPrototypePredictor
+from src.models import Kodiak
 from src.losses import MaskLoss, KoLeoLoss, KoLeoLossDistributed, MultiCropPrototypeCLSLoss
 
 
@@ -487,7 +485,10 @@ class MotifLearner(L.LightningModule):
         it = self.global_step
 
         # Get scheduled values
-        lr = self._lr_schedule[it] if self._lr_schedule is not None else self._scaled_lr
+        if self._lr_schedule is not None:
+            lr = self._lr_schedule[it]
+        else:
+            lr = getattr(self, "_scaled_lr", self.hparams.get("lr", 1e-3))
         last_layer_lr = self._last_layer_lr_schedule[it] if self._last_layer_lr_schedule is not None else lr
         wd = self._wd_schedule(self.current_epoch) if self._wd_schedule is not None else self.weight_decay_start
 
@@ -559,8 +560,9 @@ class MotifLearner(L.LightningModule):
                 mask_loss += self.loss_fn(s_logits, teacher_patch_logits[i], global_masks[i])
             mask_loss /= len(student_patch_outputs)
 
-            # Update centers
-            self.loss_fn.update_center(teacher_patch_logits.mean(dim=0))
+            # Update EMA centers only during training (validation must not mutate state)
+            if is_train:
+                self.loss_fn.update_center(teacher_patch_logits.mean(dim=0))
 
             # 2. Multi-Crop Prototype CLS Loss CONTRIBUTION
             # Combines all student CLS (global + local) predicting teacher global CLS prototypes
@@ -576,20 +578,12 @@ class MotifLearner(L.LightningModule):
                 proto_cls_loss, proto_cls_metrics = self.prototype_cls_loss(
                     teacher_cls_tokens=teacher_global_cls,
                     student_cls_tokens=all_student_cls,
+                    update_center=is_train,
                 )
 
             # 3. KoLeo Loss (on all student CLS tokens)
             koleo_loss = torch.tensor(0.0, device=self.device)
             if self.koleo_loss_weight > 0:
-                # Flatten all student CLS: (2+N, B, D) → ((2+N)*B, D)
-                if student_local_cls is not None:
-                    all_cls = torch.cat([
-                        student_global_cls.reshape(-1, student_global_cls.shape[-1]),
-                        student_local_cls.reshape(-1, student_local_cls.shape[-1])
-                    ], dim=0)
-                else:
-                    all_cls = student_global_cls.reshape(-1, student_global_cls.shape[-1])
-
                 # Compute KoLeo per crop type and average
                 n_global = student_global_cls.shape[0]
                 B = student_global_cls.shape[1]
@@ -633,7 +627,8 @@ class MotifLearner(L.LightningModule):
             for i, s_logits in enumerate(student_outputs):
                 mask_loss += self.loss_fn(s_logits, teacher_logits, masks[i])
             mask_loss /= len(masks)
-            self.loss_fn.update_center(teacher_logits)
+            if is_train:
+                self.loss_fn.update_center(teacher_logits)
 
             # 2. Prototype CLS Loss (simplified for legacy mode)
             proto_cls_loss = torch.tensor(0.0, device=self.device)
@@ -648,6 +643,7 @@ class MotifLearner(L.LightningModule):
                 proto_cls_loss, proto_cls_metrics = self.prototype_cls_loss(
                     teacher_cls_tokens=teacher_cls_reshaped,
                     student_cls_tokens=student_cls_reshaped,
+                    update_center=is_train,
                 )
 
             # 3. KoLeo Loss
@@ -750,7 +746,8 @@ class MotifLearner(L.LightningModule):
         weight_decay = self.hparams.get('weight_decay', 0.04)
         warmup_epochs = self.hparams.get('warmup_epochs', 10)
         max_epochs = self.hparams.get('max_epochs', 100)
-        vit_depth = self.hparams.get('vit_depth', 12)
+        # Depth of the student backbone (hparam is None when a model instance is injected)
+        vit_depth = self.hparams.get('vit_depth') or getattr(self.model.student_encoder, 'n_blocks', None) or 12
 
         # Get world size for LR scaling
         world_size = self.trainer.world_size if self.trainer else 1
@@ -848,7 +845,18 @@ class MotifLearner(L.LightningModule):
         # Group parameters by their properties
         param_groups_dict = {}
 
-        for name, param in self.model.named_parameters():
+        # Parameters of the final linear layer of the CLS prototype head are
+        # treated like DINOv3's `last_layer` (frozen for freeze_last_layer_epochs).
+        cls_head_last_layer_ids = set()
+        if self.prototype_cls_loss is not None:
+            cls_head_last_layer_ids = {
+                id(p) for p in self.prototype_cls_loss.cls_prototype_head[-1].parameters()
+            }
+
+        # Iterate over ALL trainable parameters of the LightningModule. This covers
+        # the backbone/decoder/heads under `model.` and the learnable CLS prototype
+        # head under `prototype_cls_loss.` (which previously was never optimized).
+        for name, param in self.named_parameters():
             if not param.requires_grad:
                 continue
 
@@ -876,7 +884,11 @@ class MotifLearner(L.LightningModule):
                 wd_mult = 0.0
 
             # EXACT DINOv3: is_last_layer for prototype/last_layer params
-            is_last_layer = "last_layer" in name or "prototype" in name
+            is_last_layer = (
+                "last_layer" in name
+                or "prototype_layer" in name
+                or id(param) in cls_head_last_layer_ids
+            )
 
             # Create group key based on lr_mult, wd_mult, and is_last_layer
             group_key = f"lr_{lr_mult:.6f}_wd_{wd_mult:.2f}_last_{is_last_layer}"

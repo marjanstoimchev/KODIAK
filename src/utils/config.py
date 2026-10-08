@@ -1,9 +1,25 @@
-"""Configuration management for M³-Net."""
+"""Configuration management for KODIAK (YAML configs with dot-notation access)."""
 
+import os
 import yaml
 from pathlib import Path
 from typing import Any, Dict, Union
-from dataclasses import dataclass, field
+
+
+def expand_env_vars(value: Any) -> Any:
+    """Recursively expand ``$VAR`` / ``${VAR}`` and ``~`` in string config values.
+
+    Lets configs reference machine-specific locations without editing them, e.g.
+    ``root_dir: "${KODIAK_DATA_DIR}/pancreatic"``. Unset variables are left as-is
+    so that validation can report a clear "directory not found" error.
+    """
+    if isinstance(value, str):
+        return os.path.expanduser(os.path.expandvars(value))
+    if isinstance(value, dict):
+        return {k: expand_env_vars(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [expand_env_vars(v) for v in value]
+    return value
 
 
 class Config:
@@ -58,7 +74,12 @@ def load_config(config_path: Union[str, Path]) -> Config:
     with open(config_path, 'r') as f:
         config_dict = yaml.safe_load(f)
 
-    return Config(config_dict)
+    if config_dict is None:
+        raise ValueError(f"Config file is empty: {config_path}")
+    if not isinstance(config_dict, dict):
+        raise ValueError(f"Config file must contain a mapping at the top level: {config_path}")
+
+    return Config(expand_env_vars(config_dict))
 
 
 def save_config(config: Union[Config, Dict], save_path: Union[str, Path]):
@@ -103,7 +124,7 @@ def override_config(config: Config, overrides: Dict[str, Any]) -> Config:
         current = config_dict
 
         for k in keys[:-1]:
-            if k not in current:
+            if not isinstance(current.get(k), dict):
                 current[k] = {}
             current = current[k]
 

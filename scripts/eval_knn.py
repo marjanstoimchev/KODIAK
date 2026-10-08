@@ -40,10 +40,8 @@ Output:
 import argparse
 import json
 import sys
-import re
 import numpy as np
 from pathlib import Path
-from typing import Optional, Dict, Any, List
 
 import torch
 import torch.nn.functional as F
@@ -51,88 +49,22 @@ import pytorch_lightning as pl
 from tqdm import tqdm
 
 ROOT = Path(__file__).parent.parent.resolve()
+SCRIPTS_DIR = Path(__file__).parent.resolve()
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(SCRIPTS_DIR))
 
 from src.models import LinearClassifier
 from src.data import ClassificationDataModule
 from src.data.utils import SamplerType
-from src.utils.config import load_config
+from src.utils.config import load_config, override_config
 
-
-# ---------------------------------------------------------
-# Checkpoint utilities
-# ---------------------------------------------------------
-def find_checkpoint(path: str, checkpoint_type: str = "last") -> Optional[str]:
-    path = Path(path)
-    if path.is_file():
-        return str(path)
-    if path.is_dir():
-        if checkpoint_type == "best":
-            ckpts = list(path.glob("kodiak-*.ckpt"))
-            if not ckpts:
-                ckpts = list(path.glob("*.ckpt"))
-            best_ckpt, best_loss = None, float("inf")
-            for ckpt in ckpts:
-                if ckpt.name == "last.ckpt":
-                    continue
-                match = re.search(r"train_loss[=_](\d+\.?\d*)", ckpt.name)
-                if match:
-                    loss = float(match.group(1))
-                    if loss < best_loss:
-                        best_loss = loss
-                        best_ckpt = ckpt
-            if best_ckpt:
-                return str(best_ckpt)
-        last = path / "last.ckpt"
-        if last.exists():
-            return str(last)
-        ckpts = list(path.glob("*.ckpt"))
-        if ckpts:
-            return str(sorted(ckpts, key=lambda x: x.stat().st_mtime)[-1])
-    return None
-
-
-def extract_pretraining_info(checkpoint_path: str) -> Dict[str, Any]:
-    """Extract pretraining hyperparameters from checkpoint for folder naming."""
-    info = {}
-    try:
-        ckpt = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
-        hparams = ckpt.get("hyper_parameters", {})
-        info["num_prototypes"] = hparams.get("num_prototypes", None)
-        info["koleo_loss_weight"] = hparams.get("koleo_loss_weight", None)
-        info["cls_loss_weight"] = hparams.get(
-            "prototype_cls_loss_weight", hparams.get("cls_loss_weight", None)
-        )
-        info["multi_crop"] = hparams.get("multi_crop", False)
-        info["n_local_crops"] = hparams.get("n_local_crops", 0)
-        # Infer multi_crop from n_local_crops if not explicitly saved
-        if not info["multi_crop"] and info["n_local_crops"] and info["n_local_crops"] > 0:
-            info["multi_crop"] = True
-        if not info["num_prototypes"]:
-            model_cfg = hparams.get("model", {})
-            if isinstance(model_cfg, dict):
-                info["num_prototypes"] = model_cfg.get("num_prototypes", None)
-    except Exception as e:
-        print(f"Warning: Could not extract pretraining info: {e}")
-    return info
-
-
-def build_pretrain_folder_name(info: Dict[str, Any]) -> str:
-    """Build folder name from pretraining info: proto4096_koleo0.1_cls1_mc"""
-    parts = []
-    num_proto = info.get("num_prototypes")
-    if num_proto is not None:
-        parts.append(f"proto{num_proto}")
-    koleo = info.get("koleo_loss_weight")
-    if koleo is not None:
-        parts.append(f"koleo{koleo:.4g}" if isinstance(koleo, float) else f"koleo{koleo}")
-    cls_w = info.get("cls_loss_weight")
-    if cls_w is not None:
-        parts.append(f"cls{cls_w:.4g}" if isinstance(cls_w, float) else f"cls{cls_w}")
-    if info.get("multi_crop", False):
-        n_local = info.get("n_local_crops", 0)
-        parts.append(f"mc{n_local}" if n_local else "mc")
-    return "_".join(parts) if parts else "unknown_pretraining"
+# Re-use checkpoint helpers from train_classifier (same scripts/ directory) so
+# that output folder names are identical across train / k-NN / low-shot.
+from train_classifier import (
+    find_checkpoint,
+    extract_pretraining_info,
+    build_pretraining_folder_name as build_pretrain_folder_name,
+)
 
 
 # ---------------------------------------------------------
@@ -243,7 +175,7 @@ def create_datamodule(cfg, batch_size, seed):
         dataset_type=cfg.data.get("dataset_type", "huggingface"),
         batch_size=batch_size,
         num_workers=cfg.data.get("num_workers", 8),
-        pin_memory=True,
+        pin_memory=torch.cuda.is_available(),
         persistent_workers=True,
         train_split=cfg.data.get("train_split", 0.7),
         val_split=cfg.data.get("val_split", 0.1),
@@ -297,6 +229,10 @@ def parse_args():
                    help="Space-separated seeds for evaluation (e.g., '0 1 42')")
     p.add_argument("--concat_cls_patch", action="store_true",
                    help="Concatenate CLS token + mean patch tokens for k-NN features (2x embed_dim)")
+    p.add_argument("--root_dir", type=str, default=None,
+                   help="Root directory of a folder-based (custom) dataset (overrides data.root_dir)")
+    p.add_argument("--num_workers", type=int, default=None,
+                   help="DataLoader workers (overrides data.num_workers)")
     return p.parse_args()
 
 
@@ -307,8 +243,15 @@ def main():
     args = parse_args()
     seeds = [int(s) for s in args.seeds.split()]
 
-    # Load config
+    # Load config (+ CLI overrides)
     cfg = load_config(args.config)
+    overrides = {}
+    if args.root_dir is not None:
+        overrides["data.root_dir"] = args.root_dir
+    if args.num_workers is not None:
+        overrides["data.num_workers"] = args.num_workers
+    if overrides:
+        cfg = override_config(cfg, overrides)
 
     # Resolve checkpoint
     ckpt_path = find_checkpoint(args.pretrained_path, args.checkpoint_type)

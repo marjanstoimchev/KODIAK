@@ -16,11 +16,10 @@ Reference: DinoV3LightningTraining/dinov3/dinov3/data/augmentations.py
 """
 
 import logging
-from typing import Tuple, List, Optional, Dict, Any
+from typing import Tuple, Dict, Any
 
 import torch
 import torch.nn as nn
-from PIL import Image
 from torchvision import transforms
 from torchvision.transforms import functional as TF
 from torchvision.transforms import InterpolationMode

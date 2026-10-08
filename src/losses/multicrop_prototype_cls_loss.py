@@ -106,6 +106,7 @@ class MultiCropPrototypeCLSLoss(nn.Module):
         teacher_cls_tokens: torch.Tensor,
         student_cls_tokens: torch.Tensor,
         epoch: Optional[int] = None,
+        update_center: bool = True,
     ) -> Tuple[torch.Tensor, dict]:
         """
         Compute Multi-Crop Prototype CLS Loss.
@@ -114,6 +115,8 @@ class MultiCropPrototypeCLSLoss(nn.Module):
             teacher_cls_tokens: Teacher CLS from global crops (n_global, B, D) or (B, D)
             student_cls_tokens: Student CLS from all crops (n_crops, B, D)
             epoch: Current epoch (optional)
+            update_center: Whether to update the EMA center with this batch
+                (set to False during validation / evaluation)
 
         Returns:
             loss: Scalar loss value
@@ -124,6 +127,12 @@ class MultiCropPrototypeCLSLoss(nn.Module):
             teacher_cls_tokens = teacher_cls_tokens.unsqueeze(0)
         if student_cls_tokens.dim() == 2:
             student_cls_tokens = student_cls_tokens.unsqueeze(0)
+
+        if student_cls_tokens.shape[0] < self.n_global_crops:
+            raise ValueError(
+                f"Expected at least {self.n_global_crops} student crops (global crops first), "
+                f"got {student_cls_tokens.shape[0]}"
+            )
 
         n_teacher_crops, B, D = teacher_cls_tokens.shape
         n_student_crops = student_cls_tokens.shape[0]
@@ -144,7 +153,8 @@ class MultiCropPrototypeCLSLoss(nn.Module):
         with torch.no_grad():
             teacher_centered = teacher_logits - self.center
             teacher_probs = F.softmax(teacher_centered / self.teacher_temp, dim=-1)
-            self.update_center(teacher_logits)
+            if update_center:
+                self.update_center(teacher_logits)
 
         # Compute student log-probabilities
         student_log_probs = F.log_softmax(student_logits / self.student_temp, dim=-1)
@@ -181,8 +191,15 @@ class MultiCropPrototypeCLSLoss(nn.Module):
                 n_local_terms += 1
 
         # Average each component
-        global_loss = global_loss / max(n_global_terms, 1)
-        local_loss = local_loss / max(n_local_terms, 1) if n_local_terms > 0 else torch.tensor(0.0, device=student_cls_tokens.device)
+        device = student_cls_tokens.device
+        if n_global_terms > 0:
+            global_loss = global_loss / n_global_terms
+        else:
+            global_loss = torch.tensor(0.0, device=device)
+        if n_local_terms > 0:
+            local_loss = local_loss / n_local_terms
+        else:
+            local_loss = torch.tensor(0.0, device=device)
 
         # Total loss
         n_total_terms = n_global_terms + n_local_terms

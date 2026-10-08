@@ -34,12 +34,13 @@ Usage examples:
 import argparse
 import sys
 from pathlib import Path
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any
 
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import (
     LearningRateMonitor,
     EarlyStopping,
+    ModelCheckpoint,
 )
 from pytorch_lightning.strategies import DDPStrategy
 import torch
@@ -53,6 +54,7 @@ from src.data import PretrainingDataModule
 from src.data.utils import SamplerType
 from src.utils.config import load_config, override_config, save_config
 from src.utils.loggers import get_logger_from_config
+from src.utils.runtime import resolve_accelerator_and_devices, count_devices
 from src.callbacks import TrainingTimer
 
 
@@ -83,12 +85,17 @@ def parse_args():
     p.add_argument("--checkpoint_dir", type=str, help="Exact checkpoint directory (no auto-construction)")
     p.add_argument("--save_every_n_epochs", type=int, default=None,
                    help="Save checkpoint every N epochs (default: from config)")
+    p.add_argument("--seed", type=int, default=None, help="Random seed (overrides experiment.seed)")
+    p.add_argument("--root_dir", type=str, default=None,
+                   help="Root directory of a folder-based (custom) dataset (overrides data.root_dir)")
+    p.add_argument("--num_workers", type=int, default=None,
+                   help="DataLoader workers (overrides data.num_workers)")
 
-    # Model hyperparameters for experimentation
-    p.add_argument("--num_prototypes", type=int, default=4096,
-                   help="Number of prototypes in the prototype layer (default: 4096)")
-    p.add_argument("--koleo_weight", type=float, default=0.1,
-                   help="Weight for KoLeo loss (collapse prevention, default: 0.1)")
+    # Model hyperparameters for experimentation (default: from config)
+    p.add_argument("--num_prototypes", type=int, default=None,
+                   help="Number of prototypes in the prototype layer (default: from config)")
+    p.add_argument("--koleo_weight", type=float, default=None,
+                   help="Weight for KoLeo loss (collapse prevention, default: from config)")
 
     # Multi-crop pretraining (for Multi-Crop Prototype CLS Loss)
     p.add_argument("--multi_crop", action="store_true",
@@ -145,6 +152,12 @@ def build_overrides(args) -> Dict[str, Any]:
         o["training.checkpoint.exact_dir"] = args.checkpoint_dir  # Exact path, no auto-construction
     if args.save_every_n_epochs is not None:
         o["training.checkpoint.every_n_epochs"] = args.save_every_n_epochs
+    if args.seed is not None:
+        o["experiment.seed"] = args.seed
+    if args.root_dir is not None:
+        o["data.root_dir"] = args.root_dir
+    if args.num_workers is not None:
+        o["data.num_workers"] = args.num_workers
     # Model hyperparameters for experimentation
     if args.num_prototypes is not None:
         o["model.num_prototypes"] = args.num_prototypes
@@ -318,7 +331,7 @@ def main():
         print(f"  Local Crops:      {cfg.data.get('local_crops_number', 8)} x {cfg.data.get('local_crops_size', 96)}px")
     print(f"Batch Size:         {cfg.data.batch_size}")
     print(f"Precision:          {cfg.training.precision}")
-    print(f"Devices:            {cfg.training.devices}")
+    print(f"Devices:            {cfg.training.get('devices', 'auto')}")
     print("-" * 80)
     print("DINOv3 Scheduler Parameters (EXACT MATCH):")
     print(f"  Base LR:          {cfg.optimizer.get('learning_rate', 1e-3)}")
@@ -342,16 +355,11 @@ def main():
         mask_min_max = tuple(mask_min_max)
 
     # Compute per-GPU batch size (DinoV3 style: batch_size is TOTAL, divide by num GPUs)
-    devices = cfg.training.devices
-    if isinstance(devices, list):
-        num_gpus = len(devices)
-    elif devices == "auto":
-        num_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 1
-    else:
-        num_gpus = int(devices) if devices else 1
+    accelerator, devices = resolve_accelerator_and_devices(cfg.training.get("devices", "auto"))
+    num_gpus = count_devices(devices)
 
-    per_gpu_batch_size = cfg.data.batch_size // num_gpus if num_gpus > 0 else cfg.data.batch_size
-    print(f"Batch size: {cfg.data.batch_size} total -> {per_gpu_batch_size} per GPU ({num_gpus} GPUs)")
+    per_gpu_batch_size = max(1, cfg.data.batch_size // num_gpus)
+    print(f"Batch size: {cfg.data.batch_size} total -> {per_gpu_batch_size} per device ({num_gpus} x {accelerator})")
 
     # Multi-crop config
     local_crops_scale = cfg.data.get("local_crops_scale", [0.05, 0.4])
@@ -359,7 +367,7 @@ def main():
         local_crops_scale = tuple(local_crops_scale)
 
     # Parse sampler_type from config (default: DISTRIBUTED)
-    sampler_type_str = cfg.data.get("sampler_type", "distributed").upper()
+    sampler_type_str = str(cfg.data.get("sampler_type", "distributed")).upper()
     sampler_type = SamplerType[sampler_type_str]
 
     datamodule = PretrainingDataModule(
@@ -455,11 +463,27 @@ def main():
     # Save config
     save_config(cfg, log_dir / exp_name / "config.yaml")
 
-    # 7. Callbacks (no checkpointing during training — save once at the end)
+    # 7. Callbacks
     callbacks = [
         LearningRateMonitor(logging_interval="step"),
         TrainingTimer(save_dir=str(log_dir / exp_name)),
     ]
+
+    # Periodic checkpointing (needed for --resume and for long runs). The final
+    # checkpoint is always written to {checkpoint_dir}/last.ckpt after training.
+    every_n_epochs = cfg.training.checkpoint.get("every_n_epochs", None)
+    enable_checkpointing = every_n_epochs is not None and int(every_n_epochs) > 0
+    if enable_checkpointing:
+        callbacks.append(ModelCheckpoint(
+            dirpath=str(checkpoint_dir),
+            filename=cfg.training.checkpoint.get("filename", "kodiak-{epoch:02d}"),
+            every_n_epochs=int(every_n_epochs),
+            save_top_k=-1,  # keep every periodic checkpoint
+            save_last=True,
+            save_on_train_epoch_end=True,
+            verbose=True,
+        ))
+        print(f"Periodic checkpointing: every {every_n_epochs} epoch(s) -> {checkpoint_dir}")
 
     if cfg.training.early_stopping.enabled:
         callbacks.append(EarlyStopping(
@@ -480,8 +504,8 @@ def main():
     # - limit_val_batches=0 skips validation entirely
     trainer = pl.Trainer(
         max_epochs=cfg.training.max_epochs,
-        accelerator="gpu" if torch.cuda.is_available() else "cpu",
-        devices=cfg.training.devices,
+        accelerator=accelerator,
+        devices=devices,
         num_nodes=cfg.training.num_nodes,
         strategy=strategy,
         precision=cfg.training.precision,
@@ -493,7 +517,7 @@ def main():
         callbacks=callbacks,
         log_every_n_steps=cfg.logging.log_every_n_steps,
         fast_dev_run=args.fast_dev_run,
-        enable_checkpointing=False,  # Disable auto-checkpoint; we save last.ckpt manually
+        enable_checkpointing=enable_checkpointing,
         use_distributed_sampler=False,  # KODIAK handles its own distributed sampling
     )
 

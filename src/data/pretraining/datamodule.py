@@ -290,6 +290,6 @@ class PretrainingDataModule(pl.LightningDataModule):
             collate_fn=collate_fn
         )
 
-    def val_dataloader(self):
-        """No validation dataloader for pretraining (DINOv3 style)."""
-        return None
+    # No validation dataloader for pretraining (DINOv3 style). `val_dataloader` is
+    # intentionally NOT overridden: returning None would make Lightning fail when
+    # validation is forced on (e.g. `--fast_dev_run`).

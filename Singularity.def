@@ -13,7 +13,7 @@ From: pytorch/pytorch:2.8.0-cuda12.8-cudnn9-runtime
     export PATH=/opt/conda/bin:$PATH
 
 %files
-    requirements.txt /workspace/requirements.txt
+    requirements-lock.txt /workspace/requirements.txt
     flash_attn-2.8.3+cu12torch2.8cxx11abiTRUE-cp311-cp311-linux_x86_64.whl /workspace/flash_attn-2.8.3+cu12torch2.8cxx11abiTRUE-cp311-cp311-linux_x86_64.whl
 
 %post

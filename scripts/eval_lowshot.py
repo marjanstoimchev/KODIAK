@@ -38,7 +38,7 @@ import sys
 import time
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 
 import numpy as np
 import torch
@@ -56,8 +56,6 @@ from src.learners import ClassificationLearner
 from src.data.classification.datamodule import (
     ClassificationDataModule,
     TransformDataset,
-    ClassificationTrainTransform,
-    ClassificationValTransform,
 )
 from src.data.classification.collate import classification_collate
 from src.data.utils import SamplerType, make_sampler
@@ -189,6 +187,10 @@ def parse_args():
     p.add_argument("--method_tag", type=str, default=None,
                    help="Method name for folder structure (e.g. kodiak, dinov3). "
                         "Auto-detected from checkpoint if omitted.")
+    p.add_argument("--root_dir", type=str, default=None,
+                   help="Root directory of a folder-based (custom) dataset (overrides data.root_dir)")
+    p.add_argument("--num_workers", type=int, default=None,
+                   help="DataLoader workers (overrides data.num_workers)")
 
     p.add_argument("--fast_dev_run", action="store_true")
 
@@ -224,6 +226,9 @@ def main():
     if args.batch_size is not None:
         overrides["data.batch_size"] = args.batch_size
     if args.learning_rate is not None:
+        # `optimizer.learning_rate` takes precedence over `optimizer.lr` in
+        # cfg_to_classification_kwargs, so set both to be safe.
+        overrides["optimizer.learning_rate"] = args.learning_rate
         overrides["optimizer.lr"] = args.learning_rate
     if args.max_epochs is not None:
         overrides["training.max_epochs"] = args.max_epochs
@@ -231,6 +236,10 @@ def main():
         overrides["training.precision"] = args.precision
     if args.encoder_type is not None:
         overrides["model.encoder_type"] = args.encoder_type
+    if args.root_dir is not None:
+        overrides["data.root_dir"] = args.root_dir
+    if args.num_workers is not None:
+        overrides["data.num_workers"] = args.num_workers
 
     # Use train_seed for reproducibility
     overrides["experiment.seed"] = args.train_seed
@@ -379,7 +388,7 @@ def main():
             sampler=sampler,
             shuffle=(sampler is None),
             num_workers=cfg.data.get("num_workers", 8),
-            pin_memory=True,
+            pin_memory=torch.cuda.is_available(),
             persistent_workers=bool(cfg.data.get("num_workers", 8) > 0),
             drop_last=False,  # keep all samples for tiny subsets
             collate_fn=classification_collate,

@@ -11,6 +11,6 @@ for PROTO in 4096 2048 1024 512 256 128 64; do
   SEEDS="0 1 42" PRETRAIN_SEED=42 INIT_MODE=scratch \
   MULTI_CROP=true COMPILE=false OUTPUT_DIR=output_proto_analysis \
   LOGGER=tensorboard \
-  USE_SINGULARITY=true SIF_IMAGE=/d/hpc/home/ms3733/deeplearning.sif \
+  USE_SINGULARITY=true SIF_IMAGE="${SIF_IMAGE:-$HOME/deeplearning.sif}" \
   sbatch scripts/slurm/run_experiment.sh
 done

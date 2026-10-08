@@ -13,7 +13,7 @@
 # =============================================================================
 
 experiment:
-  name: "kodiak_pancreatic"
+  name: "kodiak_pancreatic_continued"
   seed: 42
 
 # -----------------------------------------------------------------------------
@@ -22,7 +22,7 @@ experiment:
 data:
   name: "pancreatic"
   dataset_type: "pancreatic"
-  root_dir: "/d/hpc/home/ms3733/Datasets/pancreatic/"
+  root_dir: "${KODIAK_DATA_DIR}/pancreatic"  # export KODIAK_DATA_DIR=... or pass --root_dir
   batch_size: 64
   num_workers: 22
   pin_memory: true

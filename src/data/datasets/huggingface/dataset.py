@@ -7,10 +7,9 @@ Supports smart split detection for classification tasks:
 - Returns split information for smart data loading
 """
 
-import logging
 import numpy as np
 from PIL import Image
-from typing import Optional, Union, List, Dict, Any
+from typing import Optional, Dict, Any
 from torch.utils.data import Dataset
 
 try:
@@ -18,6 +17,20 @@ try:
     HF_AVAILABLE = True
 except ImportError:
     HF_AVAILABLE = False
+
+
+def _hf_call(fn, *args, **kwargs):
+    """Call a `datasets` function, passing ``trust_remote_code=True`` when supported.
+
+    ``datasets`` < 4.0 needs ``trust_remote_code=True`` for script-based datasets,
+    while ``datasets`` >= 4.0 removed the argument entirely. This keeps both working.
+    """
+    try:
+        return fn(*args, trust_remote_code=True, **kwargs)
+    except TypeError as e:
+        if "trust_remote_code" not in str(e):
+            raise
+        return fn(*args, **kwargs)
 
 
 def get_available_splits(dataset_name: str, cache_dir: Optional[str] = None) -> Dict[str, Any]:
@@ -34,17 +47,17 @@ def get_available_splits(dataset_name: str, cache_dir: Optional[str] = None) -> 
         raise ImportError("Hugging Face datasets not available. Install with: pip install datasets")
 
     try:
-        splits = get_dataset_split_names(dataset_name, trust_remote_code=True)
+        splits = _hf_call(get_dataset_split_names, dataset_name)
     except Exception as e:
         print(f"Warning: Could not get split names for {dataset_name}: {e}")
         # Fallback: try loading and checking
         try:
-            ds = load_dataset(dataset_name, cache_dir=cache_dir, trust_remote_code=True)
+            ds = _hf_call(load_dataset, dataset_name, cache_dir=cache_dir)
             if isinstance(ds, DatasetDict):
                 splits = list(ds.keys())
             else:
                 splits = ["train"]
-        except:
+        except Exception:
             splits = ["train"]
 
     # Normalize split names
@@ -99,13 +112,13 @@ class HuggingFaceDataset(Dataset):
         print(f"HuggingFaceDataset: Loading {name}...")
         
         if split:
-            self.dataset = load_dataset(
-                name, split=split, streaming=streaming, cache_dir=cache_dir, trust_remote_code=True
+            self.dataset = _hf_call(
+                load_dataset, name, split=split, streaming=streaming, cache_dir=cache_dir
             )
         else:
             # Load all splits
-            dataset_dict = load_dataset(
-                name, streaming=streaming, cache_dir=cache_dir, trust_remote_code=True
+            dataset_dict = _hf_call(
+                load_dataset, name, streaming=streaming, cache_dir=cache_dir
             )
             
             if isinstance(dataset_dict, DatasetDict):

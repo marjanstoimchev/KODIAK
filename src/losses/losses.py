@@ -111,12 +111,7 @@ class KoLeoLossDistributed(nn.Module):
             student_output = F.normalize(student_output.float(), eps=eps, p=2, dim=-1)  # local_B x D
 
             if dist.is_available() and dist.is_initialized():
-                all_student_outputs = torch.cat(
-                    [torch.zeros_like(student_output) for _ in range(dist.get_world_size())],
-                    dim=0
-                )
-                dist.all_gather_into_tensor(all_student_outputs, student_output)
-                # Make sure gradients flow back
+                # Differentiable all-gather so gradients flow back to local features
                 all_student_outputs = torch.cat(
                     dist.nn.all_gather(student_output), dim=0
                 )

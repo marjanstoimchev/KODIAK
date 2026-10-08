@@ -31,5 +31,7 @@ __all__ = [
     "DINOv3AugmentationModule",
     # Collate
     "KodiakCollate",
+    "MultiCropKodiakCollate",
     "MPPCollate",
+    "MultiCropMPPCollate",
 ]

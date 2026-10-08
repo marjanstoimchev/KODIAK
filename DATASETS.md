@@ -6,7 +6,7 @@ KODIAK supports 7 datasets: 6 from HuggingFace and 1 custom (Pancreatic). The **
 
 | Dataset | Config Directory | Type | Classes | Source |
 |---------|-----------------|------|---------|--------|
-| **Pancreatic** | `configs/pancreatic/` | Custom (folder) | 7 | Local: `/home/marjans/Datasets/pancreatic/SLIDE-3210` |
+| **Pancreatic** | `configs/pancreatic/` | Custom (folder) | 12 | Local folder: `$KODIAK_DATA_DIR/pancreatic` |
 | CIFAR-100 | `configs/cifar100/` | HuggingFace | 100 | `uoft-cs/cifar100` |
 | DTD | `configs/DTD/` | HuggingFace | 47 | `cansa/Describable-Textures-Dataset-DTD` |
 | EuroSAT | `configs/eurosat/` | HuggingFace | 10 | `blanchon/EuroSAT_RGB` |
@@ -23,23 +23,27 @@ Each dataset has 3 config files:
 
 ## Pancreatic Dataset (Primary)
 
-The Pancreatic dataset is a custom medical imaging dataset with 7 tissue classes from histopathology slides. It uses a folder-based structure and is the main dataset for exploring KODIAK.
+The Pancreatic dataset is a custom medical imaging dataset of histopathology patches (12 tissue classes in the
+shipped config; set `data.num_classes` in `configs/pancreatic/classify.yaml` to match your data). It uses a
+folder-based structure and is the main dataset for exploring KODIAK. The dataset itself is not distributed with
+this repository.
 
 ### Folder Structure
 
+The configs reference `${KODIAK_DATA_DIR}/pancreatic`; set the variable (or pass `--root_dir` to any script).
+Both a flat layout and a nested (one sub-folder per slide) layout are detected automatically:
+
 ```
-/home/marjans/Datasets/pancreatic/SLIDE-3210/
-├── class_0/
-│   ├── image1.jpg
-│   ├── image2.jpg
-│   └── ...
-├── class_1/
-├── class_2/
-├── class_3/
-├── class_4/
-├── class_5/
-└── class_6/
+$KODIAK_DATA_DIR/pancreatic/            # flat                $KODIAK_DATA_DIR/pancreatic/   # nested
+├── class_0/                                                  ├── SLIDE-1/
+│   ├── image1.png                                            │   ├── class_0/
+│   └── ...                                                   │   └── class_1/
+├── class_1/                                                  └── SLIDE-2/
+└── ...                                                           ├── class_0/
+                                                                  └── class_1/
 ```
+
+Supported image extensions: `.png`, `.jpg`, `.jpeg`, `.tif`, `.tiff`, `.bmp`. Class names are the sub-folder names.
 
 ### Configuration
 
