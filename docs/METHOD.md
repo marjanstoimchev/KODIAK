@@ -1,10 +1,28 @@
 # How KODIAK works
 
-**KODIAK** (**KO**debook **DI**stillation for **A**daptation) adapts a vision foundation model (DINOv3 ViT-S/16) to
-a new imaging domain using only unlabelled images. Continuing a standard self-supervised objective (DINO-style
-distillation of *continuous* features) on a few thousand images often makes the model worse; KODIAK replaces the
-continuous targets with **discrete, balanced codebook assignments**, which keeps adaptation stable. The same
-objective also trains well from scratch.
+## The problem: representation drift
+
+The obvious way to specialise a self-supervised foundation model (DINOv3, MAE, I-JEPA, ...) to a new imaging
+domain is to keep training it with its own objective on the domain images. With only a few thousand images this
+is fragile. Standard self-distillation asks the student to regress the teacher's *continuous* feature vectors; with
+little data diversity those targets are weakly constrained, the EMA teacher slowly drifts, and the geometry of the
+pretrained representation is distorted. The paper shows this directly: on DTD and Oxford-Pets, continued DINOv3
+pretraining *lowers* fine-tuning accuracy by 6 to 9 points, and layer-wise CKA between the adapted and the
+original model shows large drift (about 0.5) concentrated in the mid-to-late transformer layers.
+
+## The idea: discrete, balanced codebook targets
+
+**KODIAK** (**KO**debook **DI**stillation for **A**daptation) keeps the DINO teacher-student protocol but changes
+the *target space*. The student predicts assignments to a learnable **codebook** of `K` prototype vectors
+(default `K = 128`) instead of regressing features. Two properties make this stable:
+
+- **Discrete bottleneck.** A `K`-way categorical decision has far fewer degrees of freedom than a 384-dimensional
+  regression target, which limits how far the representation can move to fit surface statistics of a small dataset.
+- **Sinkhorn-Knopp balancing.** Teacher assignments are balanced across the codebook within each batch, so all
+  prototypes stay in use and the codebook cannot collapse to a handful of entries.
+
+The result is adaptation that improves the foundation model on every dataset in the paper while keeping CKA
+drift around 0.1, and a codebook whose entries are interpretable, spatially coherent visual concepts.
 
 <p align="center"><img src="../media/architecture.png" alt="KODIAK architecture" width="900"></p>
 

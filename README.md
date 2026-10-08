@@ -2,7 +2,7 @@
 
 # KODIAK
 
-**Codebook distillation for adapting vision foundation models to new imaging domains with few unlabelled images**
+**Drift-free adaptation of vision foundation models to new imaging domains, with discrete codebook distillation on unlabelled images**
 
 [![CI](https://github.com/marjanstoimchev/KODIAK/actions/workflows/ci.yml/badge.svg)](https://github.com/marjanstoimchev/KODIAK/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -22,11 +22,21 @@
 
 ---
 
-KODIAK is a self-supervised method that takes a pretrained vision transformer (DINOv3 ViT-S/16) and adapts it to a
-new domain, such as histopathology, satellite or texture images, using **only unlabelled images**. Instead of
-distilling continuous features, which tends to *degrade* a foundation model on small datasets, the student learns to
-predict **discrete, Sinkhorn-balanced codebook assignments** of the teacher for masked patches and across crops.
-The adapted encoder is then used for classification with few labels, k-NN retrieval or feature extraction.
+**The problem: representation drift.** Continuing self-supervised training of a vision foundation model (DINOv3,
+MAE, ...) on a small, specialised dataset, for example a few thousand histopathology or satellite images, is
+supposed to adapt the model. In practice it often does the opposite: the continuous feature targets of standard
+self-distillation are weakly constrained, so the teacher *drifts*, the geometric structure of the pretrained
+representation is distorted, and downstream accuracy drops below the un-adapted foundation model.
+
+**What KODIAK does.** KODIAK (**KO**debook **DI**stillation for **A**daptation) replaces continuous targets with
+a **discrete vocabulary of visual concepts**: a learnable codebook whose Sinkhorn-balanced assignments the student
+must predict for masked patches and across crops. Predicting categorical assignments instead of regressing
+high-dimensional features anchors the representation on reusable prototypes, so the foundation model is adapted
+to the domain **without drifting away from what it already knows**. The paper measures this directly with
+layer-wise CKA: drift stays around 0.1 with KODIAK versus about 0.5 with standard self-distillation. The learned
+codebook entries are also interpretable: each maps to a spatially coherent visual concept, giving concept maps
+for cell phenotyping, tissue-niche discovery or materials characterisation on top of classification and
+retrieval.
 
 This is the official PyTorch Lightning implementation of
 
@@ -42,8 +52,11 @@ This is the official PyTorch Lightning implementation of
 
 ## Highlights
 
+- **Drift-free adaptation**: discrete, Sinkhorn-balanced codebook targets preserve the pretrained representation
+  during continued self-supervised learning; unlabelled domain images are enough.
 - **Single-stage and DINO-compatible**: teacher-student with EMA, multi-crop, no external tokenizer.
 - **Three losses**: masked codebook prediction (core), cross-view CLS alignment, KoLeo uniformity.
+- **Interpretable codebook**: each entry is a reusable visual concept; concept maps come for free.
 - **Two regimes**: continued pretraining from DINOv3 weights, or training from scratch.
 - **Four evaluation protocols** built in: fine-tuning, linear probing, k-NN, few-shot.
 - **Runs anywhere**: single GPU, multi-GPU DDP, SLURM + Singularity; tested on CPU in CI.
