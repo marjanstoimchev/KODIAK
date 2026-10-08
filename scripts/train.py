@@ -215,13 +215,13 @@ def cfg_to_motif_kwargs(cfg) -> Dict[str, Any]:
         vit_heads=m.get("vit_heads", 6),
         mlp_ratio=m.get("vit_mlp_ratio", 4.0),
         num_storage_tokens=m.get("num_storage_tokens", 4),  # DINOv3 register tokens
-        drop_path_rate=m.get("drop_path_rate", 0.3),  # DINOv3 default
+        drop_path_rate=m.get("drop_path_rate", 0.1),
 
         # Pretrained weights
         pretrained_path=m.get("pretrained_path", None),
 
         # Heads
-        num_prototypes=m.get("num_prototypes", 4096),
+        num_prototypes=m.get("num_prototypes", 128),
         projector_dim=m.get("projector_dim", 256),
         decoder_embed_dim=m.get("decoder_dim", 192),
         decoder_depth=m.get("decoder_depth", 4),
@@ -317,7 +317,7 @@ def main():
     # 4. Training summary
     mask_min_max = cfg.model.get("mask_ratio_min_max", [0.1, 0.5])
     mask_prob = cfg.model.get("mask_sample_probability", 0.5)
-    num_prototypes = cfg.model.get("num_prototypes", 4096)
+    num_prototypes = cfg.model.get("num_prototypes", 128)
     koleo_weight = cfg.loss.get("koleo_loss_weight", 0.1)
     proto_cls_weight = cfg.loss.get("prototype_cls_loss_weight", 1.0)
     multi_crop = cfg.data.get("multi_crop", False)
@@ -333,7 +333,7 @@ def main():
     print(f"Proto CLS Weight:   {proto_cls_weight}  (Multi-crop prototype CLS loss)")
     print(f"Multi-Crop:         {multi_crop}")
     if multi_crop:
-        print(f"  Local Crops:      {cfg.data.get('local_crops_number', 8)} x {cfg.data.get('local_crops_size', 96)}px")
+        print(f"  Local Crops:      {cfg.data.get('local_crops_number', 8)} x {cfg.data.get('local_crops_size', 112)}px")
     print(f"Batch Size:         {cfg.data.batch_size}")
     print(f"Precision:          {cfg.training.precision}")
     print(f"Devices:            {cfg.training.get('devices', 'auto')}")
@@ -391,7 +391,7 @@ def main():
         # --- Multi-Crop Args (for Multi-Crop Prototype CLS Loss) ---
         multi_crop=multi_crop,
         local_crops_number=cfg.data.get("local_crops_number", 8),
-        local_crops_size=cfg.data.get("local_crops_size", 96),
+        local_crops_size=cfg.data.get("local_crops_size", 112),
         local_crops_scale=local_crops_scale,
 
         # Sampler config

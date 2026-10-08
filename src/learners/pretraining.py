@@ -251,7 +251,7 @@ class MotifLearner(L.LightningModule):
         loss_fn: Optional[torch.nn.Module] = None,
         koleo_loss: Optional[torch.nn.Module] = None,
         # Training config (DINOv3-aligned defaults)
-        lr: float = 1e-3,  # DINOv3 default base LR
+        lr: float = 1e-4,  # paper default (from scratch); 1e-5 for continued pretraining
         min_lr: float = 1e-6,  # DINOv3 default
         weight_decay: float = 0.04,  # DINOv3 default start
         weight_decay_end: float = 0.4,  # DINOv3 cosine schedule endpoint

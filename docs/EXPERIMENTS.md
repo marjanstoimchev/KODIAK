@@ -1,6 +1,6 @@
 # Experiment recipes
 
-Copy-paste commands for every experiment in the paper, on SLURM (with an optional Singularity container) and on a plain multi-GPU machine. See the [README](README.md) for installation and the short version, [DATASETS.md](DATASETS.md) for per-dataset commands and [ABLATIONS.md](ABLATIONS.md) for ablations.
+Copy-paste commands for every experiment in the paper, on SLURM (with an optional Singularity container) and on a plain multi-GPU machine. See the [README](../README.md) for installation and the short version, [DATASETS.md](DATASETS.md) for per-dataset commands and [ABLATIONS.md](ABLATIONS.md) for ablations.
 
 Set `KODIAK_DATA_DIR` (or pass `--root_dir`) before running anything on the Pancreatic dataset.
 
@@ -349,7 +349,7 @@ for ABL in full no_sinkhorn no_cls_loss no_koleo; do
     PRETRAIN_EPOCHS=500 \
     CLASSIFY_EPOCHS=100 \
     BATCH_SIZE=64 \
-    NUM_PROTOTYPES=1024 \
+    NUM_PROTOTYPES=128 \
     USE_SINGULARITY=true \
     sbatch scripts/slurm/run_ablation.sh
 done
@@ -540,7 +540,7 @@ Requires an existing pretrained checkpoint.
 ./scripts/run_ablation.sh --dataset pancreatic --gpus 0,1 \
     --ablations "full no_sinkhorn no_cls_loss no_koleo" \
     --pretrain-epochs 500 --classify-epochs 100 \
-    --batch-size 64 --num-prototypes 1024 --output-dir ablations
+    --batch-size 64 --num-prototypes 128 --output-dir ablations
 ```
 
 ---

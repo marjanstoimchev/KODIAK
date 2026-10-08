@@ -67,7 +67,7 @@ class KodiakHeadConfig:
         decoder_depth: Number of decoder transformer blocks
         decoder_num_heads: Number of attention heads in decoder
     """
-    num_prototypes: int = 4096
+    num_prototypes: int = 128
     projector_dim: int = 256
     decoder_embed_dim: int = 192
     decoder_depth: int = 4
@@ -150,7 +150,7 @@ class TrainingConfig:
         patch_embed_lr_mult: LR multiplier for patch embedding (DINOv3 default: 0.2)
         lr_scaling: LR scaling rule ('none', 'sqrt_wrt_1024')
     """
-    lr: float = 1e-3  # DINOv3 default
+    lr: float = 1e-4  # paper default (from scratch); 1e-5 for continued pretraining
     min_lr: float = 1e-6  # DINOv3 default
     weight_decay: float = 0.04  # DINOv3 default
     weight_decay_end: float = 0.4  # DINOv3 cosine schedule endpoint

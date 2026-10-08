@@ -82,7 +82,7 @@ model:
   drop_path_rate: 0.1  # Conservative for small dataset
 
   # Prototype configuration (4096 for full capacity)
-  num_prototypes: 4096
+  num_prototypes: 128
   projector_dim: 256
 
   # Decoder configuration

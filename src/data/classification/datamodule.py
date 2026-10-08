@@ -104,7 +104,9 @@ class ClassificationDataModule(pl.LightningDataModule):
         **kwargs,
     ):
         super().__init__()
-        self.save_hyperparameters(ignore=['batch_size'])
+        # `sampler_type` is an Enum: keep it out of the saved hparams so checkpoints
+        # stay loadable with torch.load(weights_only=True) (default in torch >= 2.6).
+        self.save_hyperparameters(ignore=['batch_size', 'sampler_type'])
 
         self.dataset_type = dataset_type
         self.batch_size = batch_size

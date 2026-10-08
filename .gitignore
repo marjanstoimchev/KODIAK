@@ -43,6 +43,8 @@ build/
 figures/
 *.pdf
 *.png
+!media/
+!media/*.png
 paper.tex
 
 # OS
@@ -60,3 +62,7 @@ venv/
 .env
 wandb/
 lightning_logs/
+
+# Paper sources (never publish)
+main.tex
+*.tex

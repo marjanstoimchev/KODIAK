@@ -36,7 +36,7 @@ class Kodiak(nn.Module):
     - Inference at arbitrary resolutions
     - Multi-resolution training
     """
-    def __init__(self, num_prototypes=4096, projector_dim=256, img_size=256, patch_size=16,
+    def __init__(self, num_prototypes=128, projector_dim=256, img_size=256, patch_size=16,
                  embed_dim=384, depth=12, num_heads=6, mlp_ratio=4.0, num_storage_tokens=4,
                  decoder_embed_dim=192, decoder_depth=4, decoder_num_heads=6,
                  drop_path_rate=0.0, pretrained_path=None):

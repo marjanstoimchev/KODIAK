@@ -103,7 +103,7 @@ class PretrainingDataModule(pl.LightningDataModule):
         # Multi-crop config
         multi_crop: bool = False,
         local_crops_number: int = 8,
-        local_crops_size: int = 96,
+        local_crops_size: int = 112,
         local_crops_scale: Tuple[float, float] = (0.05, 0.4),
         # Masking config
         mask_ratio_tuple: Tuple[float, float] = (0.1, 0.5),
@@ -123,7 +123,9 @@ class PretrainingDataModule(pl.LightningDataModule):
         **kwargs,
     ):
         super().__init__()
-        self.save_hyperparameters(ignore=['batch_size'])
+        # `sampler_type` is an Enum: keep it out of the saved hparams so checkpoints
+        # stay loadable with torch.load(weights_only=True) (default in torch >= 2.6).
+        self.save_hyperparameters(ignore=['batch_size', 'sampler_type'])
 
         self.dataset_type = dataset_type
         self.batch_size = batch_size

@@ -37,7 +37,7 @@ PRETRAIN_EPOCHS=500 \
 CLASSIFY_EPOCHS=100 \
 CLASSIFY_LR=1e-4 \
 BATCH_SIZE=64 \
-NUM_PROTOTYPES=1024 \
+NUM_PROTOTYPES=128 \
 USE_SINGULARITY=true \
 LOGGER=tensorboard \
 sbatch scripts/slurm/run_ablation.sh
@@ -53,7 +53,7 @@ for ABL in full no_sinkhorn no_cls_loss no_koleo; do
     CLASSIFY_EPOCHS=100 \
     CLASSIFY_LR=1e-4 \
     BATCH_SIZE=64 \
-    NUM_PROTOTYPES=1024 \
+    NUM_PROTOTYPES=128 \
     USE_SINGULARITY=true \
     LOGGER=tensorboard \
     sbatch scripts/slurm/run_ablation.sh
@@ -70,7 +70,7 @@ for ABL in full no_sinkhorn no_cls_loss no_koleo; do
     CLASSIFY_EPOCHS=100 \
     CLASSIFY_LR=1e-4 \
     BATCH_SIZE=128 \
-    NUM_PROTOTYPES=1024 \
+    NUM_PROTOTYPES=128 \
     USE_SINGULARITY=true \
     LOGGER=tensorboard \
     sbatch scripts/slurm/run_ablation.sh
@@ -87,7 +87,7 @@ for ABL in full no_sinkhorn no_cls_loss no_koleo; do
     CLASSIFY_EPOCHS=100 \
     CLASSIFY_LR=1e-4 \
     BATCH_SIZE=128 \
-    NUM_PROTOTYPES=1024 \
+    NUM_PROTOTYPES=128 \
     USE_SINGULARITY=true \
     LOGGER=tensorboard \
     sbatch scripts/slurm/run_ablation.sh
@@ -104,7 +104,7 @@ done
     --pretrain-epochs 500 \
     --classify-epochs 100 \
     --batch-size 64 \
-    --num-prototypes 1024 \
+    --num-prototypes 128 \
     --output-dir ablations
 ```
 
@@ -116,7 +116,7 @@ done
 |----------|---------|-------------|
 | `ABLATION` | — | **Required.** One of: `full`, `no_sinkhorn`, `no_cls_loss`, `no_koleo` |
 | `DATASET` | dtd | Dataset name |
-| `NUM_PROTOTYPES` | 1024 | Number of prototypes |
+| `NUM_PROTOTYPES` | 128 | Number of prototypes |
 | `PRETRAIN_EPOCHS` | 500 | Pretraining epochs |
 | `CLASSIFY_EPOCHS` | 100 | Classification epochs |
 | `CLASSIFY_LR` | 1e-4 | Classification learning rate |
@@ -134,10 +134,10 @@ Ablation results are saved under the `ablations/` directory (or `--output-dir`):
 ```
 ablations/
 ├── checkpoints/pretraining/{dataset}/
-│   ├── kodiak_{dataset}_full_proto1024_koleo0.1_cls1.0_mc/last.ckpt
-│   ├── kodiak_{dataset}_no_sinkhorn_proto1024_koleo0.1_cls1.0_mc/last.ckpt
-│   ├── kodiak_{dataset}_no_cls_loss_proto1024_koleo0.0_cls0.0_mc/last.ckpt
-│   └── kodiak_{dataset}_no_koleo_proto1024_koleo0.0_cls1.0_mc/last.ckpt
+│   ├── kodiak_{dataset}_full_proto128_koleo0.1_cls1.0_mc/last.ckpt
+│   ├── kodiak_{dataset}_no_sinkhorn_proto128_koleo0.1_cls1.0_mc/last.ckpt
+│   ├── kodiak_{dataset}_no_cls_loss_proto128_koleo0.0_cls0.0_mc/last.ckpt
+│   └── kodiak_{dataset}_no_koleo_proto128_koleo0.0_cls1.0_mc/last.ckpt
 └── logs/
     ├── pretraining/{dataset}/
     │   └── {ablation_experiment_name}/

@@ -15,7 +15,7 @@ data:
   name: "pancreatic"
   dataset_type: "pancreatic"
   root_dir: "${KODIAK_DATA_DIR}/pancreatic"  # export KODIAK_DATA_DIR=... or pass --root_dir
-  batch_size: 48
+  batch_size: 64
   num_workers: 22
   image_size: 256
   num_classes: 12
@@ -31,7 +31,7 @@ model:
   mlp_ratio: 4.0
 
   # KODIAK-specific (needed for checkpoint loading)
-  num_prototypes: 4096
+  num_prototypes: 128
   projector_dim: 256
   decoder_dim: 192
   decoder_depth: 4
@@ -51,7 +51,7 @@ optimizer:
   backbone_lr_scale: 0.1
 
 training:
-  max_epochs: 50
+  max_epochs: 100  # fine-tuning after from-scratch pretraining; use 50 after continued pretraining, 50 for linear eval
   precision: "bf16-mixed"
   devices: [0]
   gradient_clip_val: 3.0

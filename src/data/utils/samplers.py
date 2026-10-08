@@ -61,6 +61,12 @@ class SamplerType(Enum):
     SHARDED_INFINITE_NEW = 4  # Sharded infinite with new shuffle
 
 
+# Checkpoints written before Oct 2026 contain SamplerType in the datamodule
+# hyper-parameters. Allow-list it so they load under torch.load(weights_only=True).
+if hasattr(torch.serialization, "add_safe_globals"):
+    torch.serialization.add_safe_globals([SamplerType])
+
+
 # -----------------------------------------------------------------------------
 # Helper functions
 # -----------------------------------------------------------------------------

@@ -202,6 +202,30 @@ class TestDataModules:
         assert batch["masks"][0].shape == (4, 16)
 
 
+class TestCheckpointSafety:
+    """Checkpoints must load with torch.load(weights_only=True), the default in recent torch/Lightning."""
+
+    def test_datamodule_hparams_contain_no_custom_objects(self, image_folder, tmp_path):
+        import inspect
+        if "weights_only" not in inspect.signature(torch.load).parameters:
+            pytest.skip("torch too old for weights_only")
+        for dm in [PretrainingDataModule(dataset_type="pancreatic", root_dir=str(image_folder), num_workers=0),
+                   ClassificationDataModule(dataset_type="pancreatic", root_dir=str(image_folder), num_workers=0)]:
+            assert "sampler_type" not in dm.hparams
+            path = tmp_path / f"{type(dm).__name__}.pt"
+            torch.save({"datamodule_hyper_parameters": dict(dm.hparams)}, path)
+            torch.load(path, weights_only=True)  # must not raise
+
+    def test_legacy_enum_in_checkpoint_is_allowlisted(self, tmp_path):
+        import inspect
+        if "weights_only" not in inspect.signature(torch.load).parameters or not hasattr(
+                torch.serialization, "add_safe_globals"):
+            pytest.skip("torch too old for safe globals")
+        path = tmp_path / "legacy.pt"
+        torch.save({"sampler_type": SamplerType.DISTRIBUTED}, path)
+        assert torch.load(path, weights_only=True)["sampler_type"] is SamplerType.DISTRIBUTED
+
+
 class TestSamplers:
     def test_epoch_sampler_covers_dataset(self):
         s = EpochSampler(size=10, sample_count=10, shuffle=True, seed=3, start=0, step=1)

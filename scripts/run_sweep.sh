@@ -54,13 +54,13 @@ usage() {
     echo "  --init-mode MODE         Initialization: scratch or continued (default: scratch)"
     echo "  --seeds \"S1 S2 ..\"       Classification seeds (default: 0 1 42)"
     echo "  --pretrain-seed SEED     Pretraining seed (default: 42)"
-    echo "  --pretrain-epochs N      Pretraining epochs (default: 300 for scratch, 100 for continued)"
+    echo "  --pretrain-epochs N      Pretraining epochs (default: 500 for scratch, 100 for continued)"
     echo "  --pretrain-lr LR         Pretraining learning rate (default: 0.001)"
     echo "  --classify-epochs N      Classification epochs (default: 100)"
     echo "  --classify-lr LR         Classification learning rate (default: 0.001)"
     echo "  --classify-mode MODE     finetune or lineareval (default: finetune)"
     echo "  --batch-size N           Batch size (default: 128)"
-    echo "  --num-prototypes N       Number of prototypes (default: 4096)"
+    echo "  --num-prototypes N       Number of prototypes (default: 128)"
     echo "  --koleo-weight W         KoLeo loss weight (default: 0.1)"
     echo "  --cls-weight W           CLS loss weight (default: 1.0)"
     echo "  --output-dir DIR         Output directory (default: output)"
@@ -103,7 +103,7 @@ CLASSIFY_EPOCHS="100"
 CLASSIFY_LR="0.0001"
 CLASSIFY_MODE="finetune"
 BATCH_SIZE="128"
-NUM_PROTOTYPES="4096"
+NUM_PROTOTYPES="128"
 KOLEO_WEIGHT="0.1"
 CLS_WEIGHT="1.0"
 OUTPUT_DIR="output"
@@ -255,7 +255,7 @@ if [[ -z "$PRETRAIN_EPOCHS" ]]; then
     if [[ "$INIT_MODE" == "continued" ]]; then
         PRETRAIN_EPOCHS="100"
     else
-        PRETRAIN_EPOCHS="300"
+        PRETRAIN_EPOCHS="500"
     fi
 fi
 
