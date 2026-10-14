@@ -5,7 +5,7 @@
 **Drift-free adaptation of vision foundation models to new imaging domains, with discrete codebook distillation on unlabelled images**
 
 [![CI](https://github.com/marjanstoimchev/KODIAK/actions/workflows/ci.yml/badge.svg)](https://github.com/marjanstoimchev/KODIAK/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: PolyForm Noncommercial](https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-orange.svg)](LICENSE)
 [![Paper](https://img.shields.io/badge/bioRxiv-10.64898%2F2026.10.03.756431-b31b1b.svg)](https://www.biorxiv.org/content/10.64898/2026.10.03.756431v1)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![PyTorch Lightning](https://img.shields.io/badge/PyTorch-Lightning-792ee5.svg)](https://lightning.ai/)
@@ -21,6 +21,11 @@
 </div>
 
 ---
+
+> **Research and non-commercial use only.** This code is released under the
+> [PolyForm Noncommercial License 1.0.0](LICENSE): academic, research and other non-commercial use is free;
+> commercial use of any kind is not permitted without a separate license (contact the authors).
+> If KODIAK contributes to your work, please **cite the paper** (see [Citation](#citation)) and acknowledge it.
 
 **The problem: representation drift.** Continuing self-supervised training of a vision foundation model (DINOv3,
 MAE, ...) on a small, specialised dataset, for example a few thousand histopathology or satellite images, is
@@ -111,5 +116,15 @@ The [quick start](docs/QUICKSTART.md) walks through all of this.
 
 ## License
 
-Code is released under the [MIT License](LICENSE). The vendored DINOv3 library (`dinov3/`) and the weights in
-`dinov3_weights/` are distributed under the [DINOv3 License Agreement](dinov3/LICENSE.md).
+The KODIAK code (`src/`, `scripts/`, `configs/`, `tests/`, `docs/`, `media/`) is released under the
+[PolyForm Noncommercial License 1.0.0](LICENSE). In short:
+
+- **Allowed**: use, modification and redistribution for research, teaching, personal and other non-commercial
+  purposes, including by universities, research institutes and hospitals doing research.
+- **Not allowed**: any commercial use (products, services, consulting, commercial R&D) without a separate
+  license. For commercial licensing, contact the authors.
+- **Please cite and acknowledge** the paper in publications, reports or software that build on this code
+  (BibTeX above).
+
+The vendored DINOv3 library (`dinov3/`) and the weights in `dinov3_weights/` are distributed by Meta under the
+[DINOv3 License Agreement](dinov3/LICENSE.md), which applies to them independently.
