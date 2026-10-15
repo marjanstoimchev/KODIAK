@@ -24,7 +24,8 @@
 
 > **Research and non-commercial use only.** This code is released under the
 > [PolyForm Noncommercial License 1.0.0](LICENSE): academic, research and other non-commercial use is free;
-> commercial use of any kind is not permitted without a separate license (contact the authors).
+> **commercial use of any kind requires written permission.** For a commercial or other separate license of the
+> software, contact **Marjan Stoimchev** (marjanstoimcev@gmail.com).
 > If KODIAK contributes to your work, please **cite the paper** (see [Citation](#citation)) and acknowledge it.
 
 **The problem: representation drift.** Continuing self-supervised training of a vision foundation model (DINOv3,
@@ -121,8 +122,8 @@ The KODIAK code (`src/`, `scripts/`, `configs/`, `tests/`, `docs/`, `media/`) is
 
 - **Allowed**: use, modification and redistribution for research, teaching, personal and other non-commercial
   purposes, including by universities, research institutes and hospitals doing research.
-- **Not allowed**: any commercial use (products, services, consulting, commercial R&D) without a separate
-  license. For commercial licensing, contact the authors.
+- **Not allowed**: any commercial use (products, services, consulting, commercial R&D) without a separate, written
+  license. For commercial or other licensing, contact **Marjan Stoimchev** (marjanstoimcev@gmail.com).
 - **Please cite and acknowledge** the paper in publications, reports or software that build on this code
   (BibTeX above).
 
